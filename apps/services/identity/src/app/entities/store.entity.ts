@@ -2,7 +2,7 @@ import { Column, Entity, Index, OneToMany } from 'typeorm';
 import { BaseEntity } from '../common/base.entity';
 import { Membership } from './membership.entity';
 
-/** Tenant ("Fikri Store"). */
+/** Tenant ("Ecomiq Store"). */
 @Entity({ name: 'store' })
 export class Store extends BaseEntity {
   @Column({ type: 'text' })

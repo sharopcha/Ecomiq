@@ -49,7 +49,7 @@ export class ProductsMockService {
   ];
 
   private channels: Channel[] = [
-    { id: 'chan-1', name: 'Fikri Store +', kind: 'online_store' },
+    { id: 'chan-1', name: 'Ecomiq Store +', kind: 'online_store' },
     { id: 'chan-2', name: 'Online Store', kind: 'online_store' },
     { id: 'chan-3', name: 'Amazon Marketplace', kind: 'marketplace' },
     { id: 'chan-4', name: 'eBay', kind: 'marketplace' }
@@ -341,7 +341,7 @@ export class ProductsMockService {
       {
         id: 'com-2',
         product_id: 'prod-1',
-        author_name: 'Fikri Store Assistant (AI)',
+        author_name: 'Ecomiq Store Assistant (AI)',
         author_avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=60',
         content: 'Product sales are up by 15% this week. I recommend creating a bundle with wireless accessories.',
         created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),

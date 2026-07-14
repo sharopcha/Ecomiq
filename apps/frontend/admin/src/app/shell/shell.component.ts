@@ -99,7 +99,7 @@ export class ShellComponent {
 
   readonly breadcrumbs = computed(() => {
     const url = this.currentUrl();
-    const storeName = this.auth.store()?.name ?? 'Fikri Store';
+    const storeName = this.auth.store()?.name ?? 'Ecomiq Store';
     
     if (url.startsWith('/products/new')) {
       return [storeName, 'Products', 'Add New Product'];

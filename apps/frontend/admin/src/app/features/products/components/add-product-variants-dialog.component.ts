@@ -67,7 +67,7 @@ export class AddProductVariantsDialogComponent implements OnInit {
   readonly categoryName = signal('—');
   readonly vendorName = signal('—');
   readonly typeName = signal('—');
-  readonly channelName = signal('Fikri Store');
+  readonly channelName = signal('Ecomiq Store');
 
   ngOnInit() {
     if (this.product) {

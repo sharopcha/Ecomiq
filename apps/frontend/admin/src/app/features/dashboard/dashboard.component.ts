@@ -225,7 +225,7 @@ export class DashboardComponent implements OnInit {
   }
 
   getFirstName(): string {
-    const fullName = this.auth.user()?.fullName || 'Fikri';
+    const fullName = this.auth.user()?.fullName || 'Merchant';
     return fullName.split(' ')[0];
   }
 

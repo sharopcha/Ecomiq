@@ -301,7 +301,7 @@
             }
             <span [class.text-[#F16D22]]="$last" [class.font-medium]="$last" [class.text-slate-800]="$first && !$last" class="flex items-center gap-1.5">
               {{ crumb }}
-              @if ($first && crumb === (auth.store()?.name ?? 'Fikri Store')) {
+              @if ($first && crumb === (auth.store()?.name ?? 'Ecomiq Store')) {
                 <i class="pi pi-chevron-down text-[9px] text-slate-400"></i>
               }
             </span>
@@ -365,7 +365,7 @@
         <!-- User profile avatar & store name -->
         <div class="flex items-center gap-2 pl-3 border-l border-slate-200">
           <div class="text-right hidden sm:block">
-            <div class="text-xs font-semibold text-slate-700">{{ auth.store()?.name ?? 'Fikri Store' }}</div>
+            <div class="text-xs font-semibold text-slate-700">{{ auth.store()?.name ?? 'Ecomiq Store' }}</div>
             <div class="text-[10px] text-slate-500 font-medium capitalize">{{ auth.store()?.role ?? 'Owner' }}</div>
           </div>
           <img 
