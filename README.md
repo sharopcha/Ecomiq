@@ -1,96 +1,260 @@
-# TempNx
+# Ecomiq — Multi-Tenant SaaS eCommerce Management Platform
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+Ecomiq is an enterprise-grade, multi-tenant **SaaS eCommerce management platform** (covering catalog, orders, inventory, billing, shipping, CRM, marketing campaigns, notifications, media, and AI-driven storefront workflows) designed for high performance, modular scale, and type-safe developer velocity. 
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+It is engineered as an **Nx Monorepo** of consolidated **NestJS microservices** communicating via a hybrid network of high-speed synchronous **gRPC** and asynchronous event-driven **Apache Pulsar** channels, backed by a **PostgreSQL** database-per-service setup.
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/getting-started/intro#learn-nx?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+---
 
-## Run tasks
+## 🏗️ System Architecture
 
-To run tasks with Nx use:
+Ecomiq is built on a distributed microservices model to guarantee resilience, separate domain concerns, and support independent service deployment scaling.
 
-```sh
-npx nx <target> <project-name>
+```mermaid
+graph TD
+    %% Clients
+    Cl[Web Clients: Angular Admin / Next.js Storefront] -->|REST / WS / SSE| GW[api-gateway]
+
+    %% Gateway
+    GW -->|Proxy / Edge Auth| ID[identity-service]
+    GW -->|Proxy / JWT Auth| CAT[catalog-service]
+    GW -->|Proxy / JWT Auth| INV[inventory-service]
+    GW -->|Proxy / JWT Auth| ORD[order-service]
+    GW -->|Proxy / JWT Auth| CRM[crm-service]
+    GW -->|Proxy / JWT Auth| PUR[purchasing-service]
+    GW -->|Proxy / JWT Auth| MED[media-service]
+    GW -->|Proxy / JWT Auth| MKT[marketing-service]
+    GW -->|Proxy / JWT Auth| SHP[shipping-service]
+
+    %% Internal Sync gRPC Communications
+    ORD -.-->|gRPC ValidateDiscount| MKT
+    ORD -.-->|gRPC ReserveStock| INV
+    ORD -.-->|gRPC CreatePaymentIntent| PAY[payment-service]
+
+    %% Async Pulsar Domain Event Streaming
+    subgraph Apache Pulsar Message Bus
+        PE[(persistent://ecomiq/dev/*)]
+    end
+
+    ID ==>|Publish outbox| PE
+    CAT ==>|Publish outbox| PE
+    INV ==>|Publish outbox / Consume| PE
+    ORD ==>|Publish outbox / Consume| PE
+    PAY ==>|Publish outbox / Consume| PE
+    SHP ==>|Publish outbox / Consume| PE
+    CRM ==>|Publish outbox / Consume| PE
+    NOT[notification-service] ==>|Consume commands & events| PE
+    MKT ==>|Publish outbox / Consume| PE
 ```
 
-For example:
+---
 
-```sh
-npx nx build myproject
+## 🔄 Distributed Transactions: The Checkout Saga
+
+Because Ecomiq implements a **database-per-service** model, distributed transactions (such as checkout and payment processing) cannot use regular database joins or ACID transactions. Ecomiq implements an **Orchestrated Saga Pattern** in the `order-service` to coordinate operations across multiple microservices.
+
+```mermaid
+sequenceDiagram
+    participant C as Next.js Storefront / Client
+    participant O as Order Service (Orchestrator)
+    participant M as Marketing Service (Discounts)
+    participant I as Inventory Service (Stock)
+    participant P as Payment Service (Stripe)
+    participant PB as Pulsar Message Bus
+    
+    C->>O: POST /api/orders/:id/checkout
+    activate O
+    Note over O,M: Step 1: Validate Promo Code
+    O->>M: gRPC ValidateDiscount()
+    M-->>O: Validated Discount Details (success)
+    
+    Note over O,I: Step 2: Acquire Stock Reservation
+    O->>I: gRPC ReserveStock (24-Hour Timeout Hold)
+    I-->>O: Stock Reserved & Reservation ID
+    
+    Note over O,P: Step 3: Create Payment Intent
+    O->>P: gRPC CreatePaymentIntent()
+    P-->>O: Stripe Client Secret & Intent ID
+    
+    O-->>C: 200 OK (Stripe client secret returned to UI)
+    deactivate O
+    
+    Note over C,P: Client completes payment form via Stripe Elements
+    C->>P: Stripe Gateway Webhook (Payment Succeeded)
+    activate P
+    P-->>PB: Publish event `payments.payment.succeeded`
+    deactivate P
+    
+    activate O
+    PB-->>O: Deliver event `payments.payment.succeeded`
+    Note over O: Saga Commit Phase
+    O->>O: Transition Order Status to 'paid'
+    O-->>PB: Publish event `orders.order.paid`
+    deactivate O
+    
+    Note over PB,I: Event handlers react to payment success
+    PB-->>I: Commit Stock Reservation (Deduct quantity on_hand)
+    PB-->>SHP: Create draft shipment labels (EasyPost/Shippo)
+    PB-->>NOT: Send Order Confirmation Email / SMS
+    PB-->>ANA: Update Store Sales metrics
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+### Saga Compensations (Rollback Workflow)
+If any synchronous check fails (e.g. stock unavailable) or the payment intent times out after 24 hours, the orchestrator executes **compensating transactions** in reverse order to return the system to a consistent state:
+1. **gRPC ReleaseStockReservation** in the `inventory-service` (stock is restored).
+2. **Stripe Void/Cancel Intent** in the `payment-service` (voiding the Stripe session).
+3. **Invalidate Discount Code** usage counters.
+4. Transition order state to `canceled` or `failed`.
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+---
 
-## Add new projects
+## 🛠️ Core Technology Stack
 
-While you could add new projects to your workspace manually, you might want to leverage [Nx plugins](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) and their [code generation](https://nx.dev/features/generate-code?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) feature.
+- **Monorepo Manager:** [Nx Workspace](https://nx.dev/) (orchestrates compilation, dependencies, and caching across apps and libs)
+- **Backend Microservices:** [NestJS](https://nestjs.com/) (TypeScript, dependency injection, modular structure)
+- **Database Access:** [TypeORM](https://typeorm.io/) (PostgreSQL 16, raw migration scripts, snake_case entities)
+- **Message Broker:** [Apache Pulsar](https://pulsar.apache.org/) (Key_Shared message distribution, native delayed delivery)
+- **Cache & Locks:** [Redis](https://redis.io/) (used for Gateway rate-limiting, distributed locks, session state, socket fanout)
+- **Admin Application:** [Angular 18+](https://angular.dev/) (featuring reactive Signals-driven state management, lazy page routing)
+- **Storefront Application:** [Next.js](https://nextjs.org/) (React SSR, Server Actions for mutations, [Zustand](https://github.com/pmndrs/zustand) for persistent client state, and [TanStack Query](https://tanstack.com/query) for API caching)
+- **Security:** Passport.js (RS256 signed JWTs with rotating refresh keys, JWKS token verification, TOTP 2FA)
 
-To install a new plugin you can use the `nx add` command. Here's an example of adding the React plugin:
-```sh
-npx nx add @nx/react
+---
+
+## 📁 Repository Directory Layout
+
+```
+├── apps/
+│   ├── gateway/
+│   │   └── api-gateway/            # Stateless reverse-proxy BFF edge (REST, WS, SSE, rate limit)
+│   ├── services/
+│   │   ├── identity/               # Zero-trust Identity, store setup, user auth, and JWT signing
+│   │   ├── catalog/                # Product metadata, variant option matrices, SEO taxonomies
+│   │   ├── inventory/              # Multiple warehouses, ledger-style movements, and stock rules
+│   │   ├── order/                  # Orders CRUD, returns (RMA), refund decisions, Saga orchestrator
+│   │   ├── payment/                # Stripe gateway integration, webhook inbox, refund executions
+│   │   ├── shipping/               # EasyPost/Shippo adapters, shipment tracking timeline, label purchases
+│   │   ├── purchasing/             # Suppliers, rating cards, purchase orders, receiving ledger
+│   │   ├── crm/                    # Customers, loyalty scores, reviews, segments, customer auth
+│   │   ├── notification/           # Email/SMS templates, dispatch retry loops, notification feeds
+│   │   ├── media/                  # MinIO storage, pre-signed upload links, sharp transforms
+│   │   ├── cms/                    # Store Page Builder JSONB block-tree model (Phase 3)
+│   │   ├── marketing/              # Discounts engine (gRPC validator), campaign/ad scheduler
+│   │   ├── analytics/              # Click heatmaps, CQRS read-model dashboard aggregations (Phase 6)
+│   │   └── ai/                     # Copywriter streaming, image generators, reviews sentiment
+│   └── frontend/
+│       ├── admin/                  # Angular 18+ Merchant administration panel (Signals-driven)
+│       ├── storefront/             # Next.js Server-Side Rendered buyer store (Zustand + TanStack)
+│       └── landing/                # Angular landing page (B2B SaaS product introduction)
+│
+├── libs/
+│   ├── contracts/                  # Versioned Protobuf files & generated gRPC typescript service stubs
+│   └── shared/
+│       ├── api-types/              # Shared pure TS types. Crucial contract layer preventing Type-Drift
+│       ├── auth/                   # Shared Passport Guards (JwtAuthGuard, StoreContextGuard, permissions)
+│       ├── pulsar/                 # Custom shared event-producer, consumer, and transactional outbox
+│       └── typeorm/                # Shared TypeORM baseline config, snake_case mapping, outbox entities
 ```
 
-Use the plugin's generator to create new projects. For example, to create a new React app or library:
+---
 
-```sh
-# Generate an app
-npx nx g @nx/react:app demo
+## 🔒 Advanced Architectural Patterns
 
-# Generate a library
-npx nx g @nx/react:lib some-lib
+### 1. Transactional Outbox Pattern
+To prevent the "dual-write" problem (where a microservice updates its SQL database but fails to publish the corresponding event to the Apache Pulsar broker), Ecomiq uses a **Transactional Outbox**.
+Every database transaction writes the updated entity *and* an event record into an `outbox` table in the *same PostgreSQL transaction*. A dedicated background outbox relay runner polls the `outbox` table, publishes the message to Pulsar, and flags it as processed. This guarantees **at-least-once delivery** of all domain events.
+
+### 2. Pulsar Key_Shared Subscription Ordering
+In a distributed microservice setup with multiple consumer pods, processing events concurrently can lead to race conditions. By setting the Pulsar message **routing key** to the aggregate identifier (e.g., `orderId`, `productId`, or `supplierId`) and subscribing with a `Key_Shared` subscription model, Pulsar guarantees that all events with the same key are routed to the **same consumer instance sequentially**, while maintaining parallel delivery across distinct keys.
+
+### 3. Shared contract libraries preventing Type-Drift
+Frontend-backend client mismatches are prevented using monorepo type sharing:
+- **gRPC schemas** are declared as Protobuf v3 files in [libs/contracts](file:///Users/napster/Projects/Ecomiq/libs/contracts) and compiled to TypeScript interfaces using `npm run contracts:gen`.
+- **REST structures** are declared as shared TypeScript models in [libs/shared/api-types](file:///Users/napster/Projects/Ecomiq/libs/shared/api-types).
+- Both frontend apps (Next.js, Angular) and backend services import these shared packages. If the backend schema changes, compile-time type checks fail on the frontend immediately, preventing runtime crashes.
+
+---
+
+## 🚀 Getting Started
+
+### 📋 Prerequisites
+- **Node.js** v20+
+- **Docker Desktop**
+- **protoc** (Protocol Buffers compiler - required to compile gRPC contracts)
+  ```bash
+  # macOS
+  brew install protobuf
+  ```
+
+### ⚙️ Quick Start (Development Setup)
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Generate gRPC typescript types:**
+   ```bash
+   npm run contracts:gen
+   ```
+
+3. **Spin up backing infrastructure (PostgreSQL, Redis, Pulsar, MinIO):**
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Provision Pulsar namespaces and topics:**
+   ```bash
+   npm run pulsar:provision
+   ```
+
+5. **Generate JWT signing keys (RS256):**
+   ```bash
+   npm run identity:keys:generate
+   npm run crm:keys:generate
+   npm run purchasing:keys:generate
+   ```
+
+6. **Seed services databases:**
+   ```bash
+   npm run identity:service-accounts:seed
+   npm run catalog:seed
+   npm run inventory:seed
+   npm run crm:seed
+   npm run purchasing:seed
+   npm run notification:seed
+   npm run media:seed
+   npm run payment:seed
+   npm run marketing:seed
+   npm run order:seed
+   npm run shipping:seed
+   ```
+
+7. **Run microservices in development mode:**
+   ```bash
+   # Launch individual services via Nx
+   npx nx serve api-gateway
+   npx nx nx serve identity-service
+   # ...
+   ```
+
+---
+
+## 🧪 Testing and Verification
+
+To verify typings and run unit/integration suites locally:
+
+### 1. Static Compilation Checks
+Verify that all services compile cleanly without type issues:
+```bash
+# Example
+npx tsc -p apps/services/order/tsconfig.app.json --noEmit
 ```
 
-You can use `npx nx list` to get a list of installed plugins. Then, run `npx nx list <plugin-name>` to learn about more specific capabilities of a particular plugin. Alternatively, [install Nx Console](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) to browse plugins and generators in your IDE.
-
-[Learn more about Nx plugins &raquo;](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) | [Browse the plugin registry &raquo;](https://nx.dev/plugin-registry?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Set up CI!
-
-### Step 1
-
-To connect to Nx Cloud, run the following command:
-
-```sh
-npx nx connect
+### 2. Run Test Suites
+Execute repository-wide tests managed by Jest:
+```bash
+npx jest
 ```
 
-Connecting to Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
-
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-### Step 2
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
-```
-
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Install Nx Console
-
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
-
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Useful links
-
-Learn more:
-
-- [Learn more about this workspace setup](https://nx.dev/getting-started/intro#learn-nx?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-And join the Nx community:
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+For detailed scenario test guides (including how to run webhook simulation scripts, rollback scenarios, stock reservation expiry scenarios, etc.), see the dedicated [TESTING.md](file:///Users/napster/Projects/Ecomiq/TESTING.md) playbook.
