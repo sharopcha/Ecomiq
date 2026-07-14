@@ -27,9 +27,9 @@ graph TD
     GW -->|Proxy / JWT Auth| SHP[shipping-service]
 
     %% Internal Sync gRPC Communications
-    ORD -.-->|gRPC ValidateDiscount| MKT
-    ORD -.-->|gRPC ReserveStock| INV
-    ORD -.-->|gRPC CreatePaymentIntent| PAY[payment-service]
+    ORD -.->|gRPC ValidateDiscount| MKT
+    ORD -.->|gRPC ReserveStock| INV
+    ORD -.->|gRPC CreatePaymentIntent| PAY[payment-service]
 
     %% Async Pulsar Domain Event Streaming
     subgraph Apache Pulsar Message Bus
