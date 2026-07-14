@@ -1,0 +1,15 @@
+<p-dialog [(visible)]="visible" (visibleChange)="close()" [modal]="true" [style]="{width: '800px', height: '600px'}" header="Approve Return Request" styleClass="p-0">
+  <div class="h-[500px] -mx-4 -mt-4 bg-slate-50 relative flex flex-col">
+    <!-- Email Composer takes full height of the dialog body -->
+    <app-email-composer
+      [to]="to()"
+      (toChange)="to.set($event)"
+      [subject]="subject()"
+      (subjectChange)="subject.set($event)"
+      [body]="body()"
+      (bodyChange)="body.set($event)"
+      [availableTemplates]="templates()"
+      (send)="onSend()">
+    </app-email-composer>
+  </div>
+</p-dialog>

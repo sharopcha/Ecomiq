@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+// ecomiq.payment.v1 — same versioned-package convention as
+// ecomiq.inventory.v1 (reservation.proto). Backs order-service's checkout
+// saga (ADR-7): CreatePaymentIntent is the synchronous call right after
+// ReserveStock succeeds; CancelPaymentIntent is the compensating action.
+// Server side lives in payment-service (payment-grpc.controller.ts),
+// delegating to the existing PaymentsService.createIntent()/
+// cancelIntent() — no business logic duplicated here.
+package ecomiq.payment.v1;
+
+service PaymentIntentService {
+  rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (CreatePaymentIntentResponse);
+  rpc CancelPaymentIntent(CancelPaymentIntentRequest) returns (CancelPaymentIntentResponse);
+}
+
+message CreatePaymentIntentRequest {
+  string store_id = 1;
+  string order_id = 2;
+  int64 amount_minor = 3;
+  string currency = 4;
+  // Required — the saga must never double-create an intent on a retried
+  // call (timeout, redelivery). See PaymentsService.createIntent's doc
+  // comment for the catch-the-unique-violation idempotency strategy.
+  string idempotency_key = 5;
+  map<string, string> metadata = 6;
+}
+
+message CreatePaymentIntentResponse {
+  // Insufficient-amount/provider/idempotency-conflict outcomes are expected
+  // saga branches, not exceptions — a typed oneof, same split as
+  // reservation.proto's ReserveStockResponse. Auth/not-found/malformed-
+  // request failures stay real gRPC status codes (see
+  // payment-grpc.controller.ts).
+  oneof result {
+    PaymentIntentCreated created = 1;
+    PaymentIntentFailure failure = 2;
+  }
+}
+
+message PaymentIntentCreated {
+  string payment_id = 1;
+  string external_ref = 2;
+  string client_secret = 3;
+  string status = 4;
+}
+
+message PaymentIntentFailure {
+  PaymentIntentFailureReason reason = 1;
+  string message = 2;
+}
+
+enum PaymentIntentFailureReason {
+  PAYMENT_INTENT_FAILURE_REASON_UNSPECIFIED = 0;
+  INVALID_AMOUNT = 1;
+  // The same idempotency_key was already used to create an intent for a
+  // *different* store — a genuine conflict, not a benign retry (a retry
+  // for the *same* store just gets the original intent back, no failure).
+  DUPLICATE_IDEMPOTENCY_KEY_CONFLICT = 2;
+  PROVIDER_UNAVAILABLE = 3;
+}
+
+message CancelPaymentIntentRequest {
+  string store_id = 1;
+  string payment_id = 2;
+}
+
+message CancelPaymentIntentResponse {
+  oneof result {
+    PaymentIntentCanceled canceled = 1;
+    PaymentIntentFailure failure = 2;
+  }
+}
+
+message PaymentIntentCanceled {
+  string payment_id = 1;
+  // True if this call is what canceled it; false if it was already
+  // canceled and this call was an idempotent no-op (the saga's
+  // compensation table treats both the same way).
+  bool already_canceled = 2;
+}

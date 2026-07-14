@@ -1,0 +1,9 @@
+{
+  "name": "storefront",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.19",
+    "@radix-ui/react-scroll-area": "^1.2.14"
+  }
+}

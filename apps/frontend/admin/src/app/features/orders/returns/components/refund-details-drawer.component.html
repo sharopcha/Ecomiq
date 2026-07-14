@@ -1,0 +1,120 @@
+<p-drawer [visible]="visible" (visibleChange)="visibleChange.emit($event)" position="right" styleClass="w-full md:w-[700px] !p-0" [modal]="true">
+  <ng-template pTemplate="header">
+    <div class="flex items-center gap-3">
+      <h2 class="text-xl font-bold text-slate-900">Refund Details</h2>
+      <span *ngIf="refund() as r" [class]="getStatusClass(r.status)">
+        {{ formatStatus(r.status) }}
+      </span>
+    </div>
+  </ng-template>
+
+  <div class="h-full flex flex-col bg-slate-50 relative" *ngIf="refund() as r">
+    <div class="flex-1 overflow-y-auto p-6 space-y-6">
+
+      <!-- SUMMARY -->
+      <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+        <div class="grid grid-cols-2 gap-6">
+          <div>
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Refund Amount</span>
+            <div class="mt-1 text-2xl font-bold text-slate-900">
+              ${{ (r.amount_minor / 100).toFixed(2) }}
+            </div>
+            <div class="text-sm font-medium text-slate-500 mt-1 capitalize">{{ r.refund_type }} Refund</div>
+          </div>
+          <div>
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</span>
+            <div class="mt-1">
+              <a [routerLink]="['/orders', r.order_id]" class="font-semibold text-[#F16D22] hover:underline">{{ r.order_id }}</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-slate-100">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Reason for Refund</span>
+          <p class="text-slate-800 mt-2">{{ r.reason || 'No reason provided.' }}</p>
+        </div>
+      </div>
+
+      <!-- CUSTOMER COMMUNICATION -->
+      <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+        <h3 class="font-bold text-slate-900 mb-4">Customer Communication</h3>
+        
+        <div class="mb-4">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Message to Customer</span>
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 whitespace-pre-wrap">
+            {{ r.message_to_customer || 'No message provided.' }}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <i class="pi pi-check-circle" [class.text-[#F16D22]]="r.send_info_to_customer" [class.text-slate-300]="!r.send_info_to_customer"></i>
+          <span class="text-sm font-medium text-slate-700">
+            {{ r.send_info_to_customer ? 'Notification will be sent' : 'Notification will not be sent' }}
+          </span>
+        </div>
+      </div>
+
+      <!-- ACTIVITY FEED -->
+      <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+        <h3 class="font-bold text-slate-900 mb-4">Activity</h3>
+        
+        <div class="relative pl-4 border-l-2 border-slate-100 space-y-6">
+          <div class="relative">
+            <div class="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-slate-300 ring-4 ring-white"></div>
+            <div>
+              <p class="text-sm font-bold text-slate-800">Refund Requested</p>
+              <p class="text-xs text-slate-500 mt-1">{{ r.created_at | date:'medium' }}</p>
+            </div>
+          </div>
+
+          <div class="relative" *ngIf="r.status === 'refunded' && r.refunded_at">
+            <div class="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-white"></div>
+            <div>
+              <p class="text-sm font-bold text-slate-800">Refund Processed</p>
+              <p class="text-xs text-slate-500 mt-1">{{ r.refunded_at | date:'medium' }}</p>
+            </div>
+          </div>
+
+          <div class="relative" *ngIf="r.status === 'declined'">
+            <div class="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-red-500 ring-4 ring-white"></div>
+            <div>
+              <p class="text-sm font-bold text-slate-800">Refund Declined</p>
+            </div>
+          </div>
+
+          <div class="relative" *ngIf="r.failure_reason">
+            <div class="absolute -left-[23px] top-1 w-3 h-3 rounded-full bg-amber-500 ring-4 ring-white"></div>
+            <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 mt-2 text-sm">
+              <p class="font-bold text-amber-900 mb-1">Processing Failed</p>
+              <p class="text-amber-800">{{ r.failure_reason }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <div class="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 sticky bottom-0 z-10" *ngIf="r.status === 'requested'">
+      <button (click)="showDeclineModal.set(true)" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-bold rounded-lg transition-colors">
+        Decline Refund
+      </button>
+      <button (click)="approve()" class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] text-sm font-bold rounded-lg shadow-sm transition-colors">
+        Approve Refund
+      </button>
+    </div>
+
+  </div>
+</p-drawer>
+
+<!-- Decline Modal -->
+<p-dialog [(visible)]="showDeclineModal" header="Decline Refund" [modal]="true" [style]="{width: '450px'}">
+  <div class="pt-4">
+    <p class="text-sm text-slate-600 mb-4">Please provide a reason for declining this refund. This will be stored internally.</p>
+    <textarea pInputTextarea [ngModel]="declineReason()" (ngModelChange)="declineReason.set($event)" rows="4" class="w-full text-sm rounded-lg" placeholder="Reason for decline..."></textarea>
+  </div>
+  <ng-template pTemplate="footer">
+    <button class="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg text-sm" (click)="showDeclineModal.set(false)">Cancel</button>
+    <button class="px-4 py-2 bg-red-600 text-white font-bold hover:bg-red-700 rounded-lg text-sm ml-2" (click)="decline()">Confirm Decline</button>
+  </ng-template>
+</p-dialog>

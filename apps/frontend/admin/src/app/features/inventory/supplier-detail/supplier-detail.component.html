@@ -1,0 +1,155 @@
+<div class="flex-1 p-8 bg-slate-50 min-h-screen">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex items-center gap-4">
+      <button pButton icon="pi pi-arrow-left" class="p-button-text p-button-plain p-button-rounded" (click)="goBack()"></button>
+      <div class="flex-1">
+        <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-3">
+          {{ supplier()?.name || 'Loading...' }}
+          <p-tag *ngIf="supplier()?.is_active" value="Active" severity="success"></p-tag>
+          <p-tag *ngIf="supplier() && !supplier()?.is_active" value="Inactive" severity="danger"></p-tag>
+        </h1>
+        <p class="text-slate-500 mt-1">Supplier ID: {{ supplier()?.id }}</p>
+      </div>
+      <button pButton label="Create Purchase Order" icon="pi pi-plus" (click)="createPurchaseOrder()"></button>
+    </div>
+
+    <ng-container *ngIf="loading()">
+      <div class="grid grid-cols-3 gap-6">
+        <p-skeleton width="100%" height="200px" class="col-span-1"></p-skeleton>
+        <p-skeleton width="100%" height="400px" class="col-span-2"></p-skeleton>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="!loading() && supplier() as s">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Sidebar Profile -->
+        <div class="col-span-1">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+            <div class="flex flex-col items-center text-center mb-6">
+              <img [src]="s.avatar_url || 'https://ui-avatars.com/api/?name=' + s.name" alt="Avatar" class="w-24 h-24 rounded-full mb-4 border border-slate-200">
+              <h2 class="text-xl font-bold text-slate-900">{{ s.name }}</h2>
+              <div class="flex items-center gap-2 mt-2">
+                <p-rating [(ngModel)]="s.rating" [readonly]="true"></p-rating>
+                <span class="text-sm font-medium text-slate-700">{{ s.rating }}</span>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <span class="text-xs font-bold text-slate-500 uppercase">Contact Information</span>
+                <div class="mt-2 flex items-center gap-3 text-sm text-slate-700">
+                  <i class="pi pi-phone text-slate-400"></i> {{ s.phone }}
+                </div>
+                <div class="mt-2 flex items-center gap-3 text-sm text-slate-700">
+                  <i class="pi pi-envelope text-slate-400"></i> {{ s.email }}
+                </div>
+                <div class="mt-2 flex items-center gap-3 text-sm text-slate-700">
+                  <i class="pi pi-globe text-slate-400"></i> {{ s.website || 'N/A' }}
+                </div>
+              </div>
+
+              <div>
+                <span class="text-xs font-bold text-slate-500 uppercase">Location</span>
+                <div class="mt-2 flex items-start gap-3 text-sm text-slate-700">
+                  <i class="pi pi-map-marker text-slate-400 mt-0.5"></i>
+                  <span>{{ s.location }}</span>
+                </div>
+              </div>
+
+              <div *ngIf="s.shipping_carriers?.length">
+                <span class="text-xs font-bold text-slate-500 uppercase">Carriers</span>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <p-tag *ngFor="let carrier of s.shipping_carriers" [value]="carrier" severity="secondary"></p-tag>
+                </div>
+              </div>
+
+              <div>
+                <span class="text-xs font-bold text-slate-500 uppercase">Joined</span>
+                <div class="mt-2 text-sm text-slate-700">{{ s.joined_date | date:'longDate' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div class="col-span-1 md:col-span-2">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <p-tabs value="0">
+              <p-tablist>
+                <p-tab value="0">Product Catalog</p-tab>
+                <p-tab value="1">Customer Reviews</p-tab>
+              </p-tablist>
+              <p-tabpanels>
+              <!-- Product Catalog Tab -->
+              <p-tabpanel value="0">
+                <p-table [value]="products()" [rows]="10" [paginator]="true" [rowHover]="true" styleClass="p-datatable-sm p-datatable-striped">
+                  <ng-template pTemplate="header">
+                    <tr>
+                      <th style="width: 3rem"></th>
+                      <th>Product</th>
+                      <th>SKU</th>
+                      <th>Price</th>
+                      <th>Status</th>
+                    </tr>
+                  </ng-template>
+                  <ng-template pTemplate="body" let-product>
+                    <tr>
+                      <td>
+                        <div class="w-8 h-8 bg-slate-100 rounded overflow-hidden flex items-center justify-center">
+                          <i class="pi pi-image text-slate-400"></i>
+                        </div>
+                      </td>
+                      <td class="font-medium text-slate-900">{{ product.name }}</td>
+                      <td class="text-slate-500">{{ product.sku || '-' }}</td>
+                      <td class="font-medium">${{ (product.price_minor || 0) / 100 | number:'1.2-2' }}</td>
+                      <td>
+                        <p-tag [value]="product.status" [severity]="product.status === 'active' ? 'success' : 'secondary'"></p-tag>
+                      </td>
+                    </tr>
+                  </ng-template>
+                  <ng-template pTemplate="emptymessage">
+                    <tr>
+                      <td colspan="5" class="text-center p-8 text-slate-500">
+                        No products mapped to this supplier yet.
+                      </td>
+                    </tr>
+                  </ng-template>
+                </p-table>
+              </p-tabpanel>
+
+              <!-- Customer Reviews Tab -->
+              <p-tabpanel value="1">
+                <div class="p-4" *ngIf="reviews().length > 0; else noReviews">
+                  <div *ngFor="let review of reviews(); let last = last" class="flex gap-4" [ngClass]="{'border-b border-slate-100 pb-6 mb-6': !last}">
+                    <img [src]="review.author_avatar" alt="Avatar" class="w-10 h-10 rounded-full bg-slate-100">
+                    <div class="flex-1">
+                      <div class="flex justify-between items-start mb-1">
+                        <div>
+                          <h4 class="font-bold text-slate-900">{{ review.author_name }}</h4>
+                          <div class="flex items-center gap-2 mt-1">
+                            <p-rating [(ngModel)]="review.stars" [readonly]="true"></p-rating>
+                          </div>
+                        </div>
+                        <span class="text-xs text-slate-500">{{ review.timestamp | date }}</span>
+                      </div>
+                      <h5 class="font-bold text-slate-800 mt-3 mb-1">{{ review.title }}</h5>
+                      <p class="text-slate-600 text-sm leading-relaxed">{{ review.body }}</p>
+                    </div>
+                  </div>
+                </div>
+                <ng-template #noReviews>
+                  <div class="p-8 text-center text-slate-500">
+                    <i class="pi pi-comment text-3xl text-slate-300 mb-3 block"></i>
+                    No reviews yet for this supplier.
+                  </div>
+                </ng-template>
+              </p-tabpanel>
+              </p-tabpanels>
+            </p-tabs>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+</div>

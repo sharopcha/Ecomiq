@@ -1,0 +1,419 @@
+# Production override.
+#
+# Usage (dev compose file stays the base; this only overrides what needs to
+# differ in prod — never run this file alone):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# What this changes vs. dev:
+#   - identity/catalog/inventory no longer publish host ports (the core
+#     problem this fixes: the gateway's helmet/CORS/throttle/edge-401 defenses are
+#     bypassable as long as those services are reachable directly from the
+#     host). Only api-gateway stays published — it already reaches the
+#     others by container name on the compose network, same as dev.
+#   - pulsar's host ports (broker + admin API) are also unpublished — nothing
+#     on the host needs to talk to Pulsar directly in prod; services reach it
+#     at pulsar:6650 same as dev.
+#   - pulsar broker-side token auth — the broker refuses any
+#     connection without a valid token signed by its own secret key.
+#     Redis auth — `redis-server --requirepass`.
+#   - mailhog/adminer are dev-only tools with no prod purpose (mailhog is a
+#     fake SMTP catcher; adminer is an unauthenticated DB admin UI) — moved
+#     behind a `dev-tools` profile so a plain `up -d` never starts them here.
+#   - NODE_ENV=production for every app service. This flips each service's
+#     `synchronize: !isProduction` (data-source.ts) to `false` — which is
+#     exactly why the *-migrate one-off services below exist: with
+#     synchronize off, something has to actually create the schema.
+#   - One `*-migrate` one-off service per service with its own database
+#     (identity/catalog/inventory), each targeting that service's Dockerfile
+#     `build` stage (not `runtime`) — the build stage still has full
+#     devDependencies (ts-node, typescript, the typeorm CLI) and the raw
+#     TS source, both stripped out of the pruned runtime image. This needs
+#     no Dockerfile changes: `target: build` in a compose `build:` block
+#     picks an existing intermediate stage directly. Each app service's
+#     `depends_on` gets `condition: service_completed_successfully` on its
+#     matching migrate service, so migrations run to completion before the
+#     app boots against that schema. (Only the *new* depends_on key needs to
+#     be listed per service below — Compose merges mapping keys, so the base
+#     file's existing depends_on entries for that service are kept as-is.)
+#
+# IMPORTANT: `ports` is a Compose "sequence" field, and Compose's default
+# merge behavior for sequences is to *append* the override's list to the
+# base file's list, not replace it — plain `ports: []` here would merge to
+# a no-op and silently leave every dev port published. The `!reset []` tag
+# below is Compose's explicit "clear this field" mechanism and is required,
+# not stylistic, for this override to actually do anything.
+#
+# Before running:
+#   1. Generate identity's RS256 keypair (`npm run identity:keys:generate`)
+#      if you haven't already — same requirement as dev, unrelated to this
+#      override.
+#   2. Generate a Pulsar secret key + admin token — one-time, on
+#      the host, using the same Pulsar image (no local `bin/pulsar` needed):
+#        mkdir -p infra/pulsar
+#        docker run --rm -v "$(pwd)/infra/pulsar:/keys" apachepulsar/pulsar:4.2.1 \
+#          bin/pulsar tokens create-secret-key --output /keys/secret.key --base64
+#        docker run --rm -v "$(pwd)/infra/pulsar:/keys" apachepulsar/pulsar:4.2.1 \
+#          bin/pulsar tokens create --secret-key file:///keys/secret.key --subject admin
+#      Set `PULSAR_AUTH_TOKEN` (in `.env`, never committed) to the printed
+#      token — every service (as producers/the outbox relay/consumers) and
+#      the broker's own internal client all authenticate as this one
+#      "admin" subject. Fine at this scale (see the pulsar service's own
+#      comment below for why per-role tokens are out of scope here);
+#      `infra/pulsar/secret.key` should be gitignored, same as identity's
+#      RS256 keys.
+#   3. Set `REDIS_PASSWORD` (`.env`) and make `REDIS_URL` (the gateway's,
+#      also `.env`) carry the same credential:
+#      `redis://:<REDIS_PASSWORD>@redis:6379`.
+
+services:
+  mailhog:
+    profiles: ['dev-tools']
+
+  adminer:
+    profiles: ['dev-tools']
+
+  redis:
+    # `command` fully replaces (not appends) on override per
+    # compose-spec's merge exceptions, so this needs the base file's
+    # `--appendonly yes` restated alongside the new flag, not just the flag
+    # alone. `${REDIS_PASSWORD:?...}` fails the whole `up` fast with a clear
+    # message instead of quietly booting an unauthenticated prod Redis if
+    # the var is missing.
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--requirepass',
+        '${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env for the prod profile}',
+      ]
+
+  pulsar:
+    ports: !reset []
+    # The base file's `command` (`bin/pulsar standalone ...`) invokes the
+    # broker directly — this image ships with no ENTRYPOINT that applies
+    # `PULSAR_PREFIX_*` env vars to `conf/standalone.conf` on its own (that's
+    # a separate script, `apply-config-from-env-with-prefix.py`, that must be
+    # run explicitly). Without this override, every `PULSAR_PREFIX_*` var
+    # below is inert: the broker boots with its default
+    # `authenticationEnabled=false` regardless of what's set here.
+    # Reproduced live: with only the base command, `docker exec` into the
+    # broker showed `authenticationEnabled=false` in the actual running
+    # `standalone.conf`, and an unauthenticated `curl` to the admin API
+    # (`/admin/v2/clusters`) succeeded with 200 even after setting
+    # `PULSAR_PREFIX_authenticationEnabled=true` below.
+    command:
+      - /bin/bash
+      - -c
+      - |
+        bin/apply-config-from-env-with-prefix.py PULSAR_PREFIX_ conf/standalone.conf
+        exec bin/pulsar standalone --no-functions-worker --no-stream-storage
+    environment:
+      # Token auth only (no authorizationEnabled/superUserRoles):
+      # the threat this closes is "anything on the network can publish
+      # forged events" (unauthenticated access), not fine-grained per-role
+      # permissions — that's a bigger, separate RBAC design this plan
+      # doesn't call for. Every authenticated caller can do anything, same
+      # as today's "everything is trusted" dev posture, just gated on
+      # holding a valid token now.
+      PULSAR_PREFIX_authenticationEnabled: 'true'
+      PULSAR_PREFIX_authenticationProviders: org.apache.pulsar.broker.authentication.AuthenticationProviderToken
+      PULSAR_PREFIX_tokenSecretKey: file:///pulsar/conf/secret.key
+      # The broker acts as its own client for some internal/admin
+      # operations even in standalone mode — needs a token too.
+      PULSAR_PREFIX_brokerClientAuthenticationPlugin: org.apache.pulsar.client.impl.auth.AuthenticationToken
+      PULSAR_PREFIX_brokerClientAuthenticationParameters: 'token:${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+      # Plain (non-PULSAR_PREFIX_) copy so the healthcheck's shell command
+      # below can read it as a normal container env var.
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    volumes:
+      # Generated once per the instructions above — read-only, never baked
+      # into the image, same pattern as identity's RS256 keypair mount.
+      - ./infra/pulsar/secret.key:/pulsar/conf/secret.key:ro
+    healthcheck:
+      # Overrides (not appends to) the base healthcheck's `test` — another
+      # of compose-spec's merge exceptions — since the base's unauthenticated
+      # `pulsar-admin brokers healthcheck` would now fail with authentication
+      # enabled.
+      test:
+        [
+          'CMD-SHELL',
+          'bin/pulsar-admin --admin-url http://localhost:8080 --auth-plugin org.apache.pulsar.client.impl.auth.AuthenticationToken --auth-params token:$$PULSAR_AUTH_TOKEN brokers healthcheck',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  identity-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/identity/Dockerfile
+      target: build
+    container_name: ecomiq-identity-migrate
+    environment:
+      NODE_ENV: production
+      IDENTITY_DB_HOST: postgres
+      IDENTITY_DB_PORT: 5432
+      IDENTITY_DB_USER: ${POSTGRES_USER:-ecomiq}
+      IDENTITY_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      IDENTITY_DB_NAME: ${IDENTITY_DB_NAME:-identity_db}
+    command: ['npm', 'run', 'identity:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  catalog-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/catalog/Dockerfile
+      target: build
+    container_name: ecomiq-catalog-migrate
+    environment:
+      NODE_ENV: production
+      CATALOG_DB_HOST: postgres
+      CATALOG_DB_PORT: 5432
+      CATALOG_DB_USER: ${POSTGRES_USER:-ecomiq}
+      CATALOG_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME:-catalog_db}
+    command: ['npm', 'run', 'catalog:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  inventory-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/inventory/Dockerfile
+      target: build
+    container_name: ecomiq-inventory-migrate
+    environment:
+      NODE_ENV: production
+      INVENTORY_DB_HOST: postgres
+      INVENTORY_DB_PORT: 5432
+      INVENTORY_DB_USER: ${POSTGRES_USER:-ecomiq}
+      INVENTORY_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      INVENTORY_DB_NAME: ${INVENTORY_DB_NAME:-inventory_db}
+    command: ['npm', 'run', 'inventory:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # order/payment/marketing's own
+  # *-migrate one-off services, identical shape to identity/catalog/
+  # inventory-migrate above.
+  order-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/order/Dockerfile
+      target: build
+    container_name: ecomiq-order-migrate
+    environment:
+      NODE_ENV: production
+      ORDER_DB_HOST: postgres
+      ORDER_DB_PORT: 5432
+      ORDER_DB_USER: ${POSTGRES_USER:-ecomiq}
+      ORDER_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      ORDER_DB_NAME: ${ORDER_DB_NAME:-order_db}
+    command: ['npm', 'run', 'order:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/payment/Dockerfile
+      target: build
+    container_name: ecomiq-payment-migrate
+    environment:
+      NODE_ENV: production
+      PAYMENT_DB_HOST: postgres
+      PAYMENT_DB_PORT: 5432
+      PAYMENT_DB_USER: ${POSTGRES_USER:-ecomiq}
+      PAYMENT_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
+    command: ['npm', 'run', 'payment:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  marketing-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/marketing/Dockerfile
+      target: build
+    container_name: ecomiq-marketing-migrate
+    environment:
+      NODE_ENV: production
+      MARKETING_DB_HOST: postgres
+      MARKETING_DB_PORT: 5432
+      MARKETING_DB_USER: ${POSTGRES_USER:-ecomiq}
+      MARKETING_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      MARKETING_DB_NAME: ${MARKETING_DB_NAME:-marketing_db}
+    command: ['npm', 'run', 'marketing:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  identity-service:
+    environment:
+      NODE_ENV: production
+      # Redis now requires auth; identity's own redis.module.ts
+      # already reads REDIS_PASSWORD (unset = no auth, dev default) but
+      # neither compose file ever set it here. Reproduced live: without
+      # this, identity-service logs a continuous stream of ioredis
+      # "NOAUTH Authentication required" errors — its healthcheck doesn't
+      # touch Redis, so the container still reports healthy while refresh-
+      # token reuse detection silently never works.
+      REDIS_PASSWORD: '${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env for the prod profile}'
+    ports: !reset []
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+
+  catalog-service:
+    environment:
+      NODE_ENV: production
+      # Catalog is a Pulsar producer (outbox relay); needs a token
+      # now that the broker requires one.
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+    depends_on:
+      catalog-migrate:
+        condition: service_completed_successfully
+
+  inventory-service:
+    environment:
+      NODE_ENV: production
+      # Inventory is both a Pulsar producer (outbox relay) and
+      # consumer (two PulsarServer subscriptions in main.ts); needs a token
+      # now that the broker requires one.
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+    depends_on:
+      inventory-migrate:
+        condition: service_completed_successfully
+
+  # order/payment/marketing service
+  # overrides, identical shape to catalog-service/inventory-service above:
+  # NODE_ENV, a Pulsar token (all three are outbox-relay producers; order
+  # and marketing are also consumers), ports unpublished, gated on their
+  # migrate service completing. gRPC ports (payment 50053, marketing 50052)
+  # are internal-only in prod too — services reach each other by container
+  # name on the compose network, same reasoning as the HTTP ports above.
+  order-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+    depends_on:
+      order-migrate:
+        condition: service_completed_successfully
+
+  payment-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+    depends_on:
+      payment-migrate:
+        condition: service_completed_successfully
+
+  marketing-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+    depends_on:
+      marketing-migrate:
+        condition: service_completed_successfully
+
+  # notification-service is a Pulsar producer (outbox relay) too, same
+  # reasoning as order/payment/marketing above. Its migrate step
+  # (`notification-migrate`) already lives in the base dev file (unlike the
+  # other services' migrate steps, which are prod-only) since
+  # notification-service's `synchronize` is hard-`false` unconditionally —
+  # no override needed here for that dependency, only the standard
+  # NODE_ENV/token/port changes.
+  notification-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+
+  # shipping-service is a Pulsar producer (outbox relay) too, same reasoning
+  # as notification-service above. Its migrate step (`shipping-migrate`)
+  # already lives in the base dev file (shipping-service's `synchronize` is
+  # hard-`false` unconditionally) — no override needed here for that
+  # dependency, only the standard NODE_ENV/token/port changes.
+  shipping-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+      # Same fix as identity-service's own prod override above — Redis now
+      # requires auth, and shipping's RedisModule (the public tracking
+      # cache) reads REDIS_PASSWORD but neither compose file set it here.
+      # Without this, the tracking cache would silently no-op behind a
+      # continuous "NOAUTH Authentication required" stream.
+      REDIS_PASSWORD: '${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env for the prod profile}'
+    ports: !reset []
+
+  # crm-service is a Pulsar producer (outbox relay) too, same reasoning as
+  # notification/shipping above. Its migrate step (`crm-migrate`) already
+  # lives in the base dev file (crm-service's `synchronize` is hard-`false`
+  # unconditionally) — no override needed here for that dependency, only the
+  # standard NODE_ENV/token/port changes.
+  crm-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+
+  # purchasing-service is a Pulsar producer (outbox relay) too, same
+  # reasoning as notification/shipping/crm above. Its migrate step
+  # (`purchasing-migrate`) already lives in the base dev file
+  # (purchasing-service's `synchronize` is hard-`false` unconditionally) —
+  # no override needed here for that dependency, only the standard
+  # NODE_ENV/token/port changes.
+  purchasing-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+
+  # media-service is a Pulsar producer (outbox relay) too, same reasoning as
+  # notification/shipping/crm/purchasing above. Its migrate step
+  # (`media-migrate`) already lives in the base dev file (media-service's
+  # `synchronize` is hard-`false` unconditionally) — no override needed here
+  # for that dependency, only the standard NODE_ENV/token/port changes.
+  media-service:
+    environment:
+      NODE_ENV: production
+      PULSAR_AUTH_TOKEN: '${PULSAR_AUTH_TOKEN:?PULSAR_AUTH_TOKEN must be set in .env for the prod profile}'
+    ports: !reset []
+
+  api-gateway:
+    environment:
+      NODE_ENV: production
+      # Redis now requires auth (`--requirepass` above); the base
+      # file's REDIS_URL has no credentials. Reproduced live: without this,
+      # the gateway's throttler storage logs a continuous "NOAUTH
+      # Authentication required" error. Overriding the *same* `REDIS_URL`
+      # key here (not a differently-named var) — compose only expands
+      # `${...}` from the host/`.env` at parse time, so introducing a
+      # second variable and referencing it inside another env value doesn't
+      # work; only same-key environment-map merging across the two compose
+      # files does.
+      REDIS_URL: 'redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env for the prod profile}@redis:6379'
+
+  storefront:
+    environment:
+      NODE_ENV: production

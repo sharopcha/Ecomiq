@@ -1,0 +1,667 @@
+<div class="p-6 max-w-[1400px] mx-auto text-slate-700">
+  
+  <!-- 1. HEADER STRIP -->
+  <form [formGroup]="form" (ngSubmit)="save()" class="flex flex-col gap-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-200">
+      <div class="flex items-center gap-3">
+        <a routerLink="/products" class="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors">
+          <i class="pi pi-arrow-left text-xs"></i>
+        </a>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            {{ isEditMode() ? 'Edit Product: ' + form.get('name')?.value : 'Create New Product' }}
+          </h1>
+          <span class="text-[10px] text-slate-400 font-mono">{{ isEditMode() ? 'ID: ' + productId() : 'Initializing new catalog record' }}</span>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+        <button 
+          type="button" 
+          pButton 
+          label="Cancel" 
+          class="px-4 py-2 text-slate-500 hover:text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
+          (click)="cancelEdit()"
+        ></button>
+        <button 
+          type="submit" 
+          pButton 
+          [disabled]="form.invalid"
+          label="Save Product" 
+          class="px-4 py-2 bg-[#F16D22] hover:bg-[#d65715] text-white text-xs font-bold rounded-lg shadow-md border border-[#F16D22]/20 transition-all"
+        ></button>
+      </div>
+    </div>
+
+    <!-- 2. CONTENT LAYOUT GRID -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- LEFT 2 COLUMNS: THREE-PART SCROLL CONTENT -->
+      <div class="lg:col-span-2 flex flex-col gap-6">
+        
+        <!-- ============================================ -->
+        <!-- PART 1: TOP SECTION (Media, Name, Desc, Price) -->
+        <!-- ============================================ -->
+        
+        <!-- Media Gallery -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+            <i class="pi pi-images text-[#F16D22]"></i> Product Images
+          </h3>
+          
+          <div class="flex flex-wrap gap-4">
+            <!-- Gallery images loop -->
+            @for (img of productImages(); track img) {
+              <div class="relative w-24 h-24 rounded-lg overflow-hidden border border-slate-200 group">
+                <img [src]="img" alt="Gallery preview" class="w-full h-full object-cover" />
+                <button 
+                  type="button"
+                  (click)="removeImage(img)"
+                  class="absolute top-1 right-1 w-6 h-6 rounded bg-black/60 hover:bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remove Image"
+                >
+                  <i class="pi pi-trash text-[10px]"></i>
+                </button>
+              </div>
+            }
+
+            <!-- Add Image Tile -->
+            <button 
+              type="button"
+              (click)="showAddImageDialog.set(true)"
+              class="w-24 h-24 rounded-lg border-2 border-dashed border-slate-200 hover:border-[#F16D22]/40 bg-slate-50/50 flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600 transition-all"
+            >
+              <i class="pi pi-plus text-sm"></i>
+              <span class="text-[9px] font-semibold">Add Image</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Name & SKU -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-slate-700">Product Name <span class="text-red-400">*</span></label>
+            <input 
+              type="text" 
+              pInputText
+              formControlName="name"
+              placeholder="e.g. Sony WH-1000XM5 Premium Headphones" 
+              class="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:border-[#F16D22]/60 focus:outline-none"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-slate-700">SKU Code</label>
+            <input 
+              type="text" 
+              pInputText
+              formControlName="sku"
+              placeholder="e.g. SONY-XM5-BLK" 
+              class="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:border-[#F16D22]/60 focus:outline-none font-mono"
+            />
+          </div>
+        </div>
+
+        <!-- Description with AI tools -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <i class="pi pi-align-left text-[#F16D22]"></i> Rich Description
+          </h3>
+          
+          <div class="flex flex-col gap-3">
+            <p-editor
+              formControlName="description"
+              placeholder="Describe your product details..."
+              [style]="{ height: '220px' }"
+              styleClass="text-xs"
+            ></p-editor>
+
+            <!-- AI Generative Affordance -->
+            <div class="p-4 rounded-xl border border-purple-100 bg-gradient-to-r from-[#6422F1]/5 via-[#B133DE]/5 to-[#7433DE]/5 flex flex-col gap-3">
+              <div class="flex items-center gap-2 text-xs font-semibold bg-gradient-to-r from-[#B133DE] to-[#f472b6] bg-clip-text text-transparent">
+                <i class="pi pi-sparkles text-sm text-[#B133DE]"></i> Generate with AI
+              </div>
+              <div class="flex gap-2">
+                <input 
+                  type="text" 
+                  [(ngModel)]="aiPromptText"
+                  [ngModelOptions]="{standalone: true}"
+                  placeholder="Ask AI to write description: e.g. Write a premium features bullet list for smart headphones..." 
+                  class="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-[#B133DE]/50 placeholder-slate-400"
+                />
+                <button 
+                  type="button" 
+                  (click)="generateDescriptionWithAI()"
+                  [disabled]="!aiPromptText() || isAiWriting()"
+                  class="relative px-4 py-1.5 rounded-lg text-white text-xs font-semibold overflow-hidden transition-all shadow group"
+                >
+                  <span class="absolute inset-0 bg-gradient-to-r from-[#6422F1] via-[#B133DE] to-[#7433DE] group-hover:opacity-90 transition-all"></span>
+                  <span class="relative z-10 flex items-center gap-1.5">
+                    @if (isAiWriting()) {
+                      <i class="pi pi-spin pi-spinner text-xs"></i>
+                      <span>Writing...</span>
+                    } @else {
+                      <i class="pi pi-sparkles text-xs"></i>
+                      <span>Generate</span>
+                    }
+                  </span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Pricing Card with dynamic calculations -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <i class="pi pi-dollar text-[#F16D22]"></i> Pricing Configuration
+          </h3>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-slate-700 font-medium">Price ($)</label>
+              <p-inputnumber
+                formControlName="price"
+                mode="decimal"
+                [minFractionDigits]="0"
+                [maxFractionDigits]="2"
+                [min]="0"
+                placeholder="0.00"
+                inputStyleClass="w-full text-right bg-slate-50"
+                styleClass="w-full"
+              ></p-inputnumber>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-slate-500 font-medium">Compare-at Price ($)</label>
+              <p-inputnumber
+                formControlName="compareAt"
+                mode="decimal"
+                [minFractionDigits]="0"
+                [maxFractionDigits]="2"
+                [min]="0"
+                placeholder="0.00"
+                inputStyleClass="w-full text-right bg-slate-50"
+                styleClass="w-full"
+              ></p-inputnumber>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs text-slate-500 font-medium">Cost per item ($)</label>
+              <p-inputnumber
+                formControlName="cost"
+                mode="decimal"
+                [minFractionDigits]="0"
+                [maxFractionDigits]="2"
+                [min]="0"
+                placeholder="0.00"
+                inputStyleClass="w-full text-right bg-slate-50"
+                styleClass="w-full"
+              ></p-inputnumber>
+            </div>
+          </div>
+
+          <!-- Derived metrics -->
+          <div class="grid grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div>
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Calculated Profit</span>
+              <div class="text-sm font-semibold text-slate-800 mt-1">
+                {{ profit() | currency }}
+              </div>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Calculated Gross Margin</span>
+              <div class="text-sm font-semibold text-emerald-600 mt-1">
+                {{ grossMargin() / 100 | percent: '1.1-1' }}
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <p-toggleswitch formControlName="chargeTax" styleClass="scale-90"></p-toggleswitch>
+            <div class="flex flex-col">
+              <span class="text-xs font-semibold text-slate-700">Charge tax on this product</span>
+              <span class="text-[10px] text-slate-500">Collect sales tax on checkout automatically.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PART 2: MIDDLE SECTION (Stock & Shipping) -->
+        <!-- ============================================ -->
+
+        <!-- Stock Section -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <i class="pi pi-database text-[#F16D22]"></i> Warehouse Stock
+          </h3>
+
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center text-slate-650">
+                <i class="pi pi-map-marker text-sm"></i>
+              </div>
+              <div>
+                <span class="text-xs font-semibold text-slate-800">{{ primaryLocationName() }}</span>
+                <span class="text-[10px] text-slate-400 block">Current Total Stock Available</span>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="text-lg font-bold text-slate-800">{{ productTotalStock() }} units</span>
+              <span class="text-[10px] font-bold text-emerald-600 block" *ngIf="productStockStatus() === 'High'">High</span>
+              <span class="text-[10px] font-bold text-amber-500 block" *ngIf="productStockStatus() === 'Low'">Low</span>
+              <span class="text-[10px] font-bold text-red-500 block" *ngIf="productStockStatus() === 'Out of Stock'">Out of Stock</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Reorder method select -->
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-slate-700">Reorder Method</label>
+              <p-select 
+                [options]="reorderMethods" 
+                formControlName="reorder_method" 
+                optionLabel="label" 
+                optionValue="value"
+                styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-700 flex items-center"
+              ></p-select>
+            </div>
+
+            <!-- Reorder qty -->
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-slate-700">Reorder Quantity</label>
+              <p-inputnumber
+                formControlName="reorder_qty"
+                [min]="0"
+                [useGrouping]="false"
+                inputStyleClass="w-full text-center bg-slate-50"
+                styleClass="w-full"
+              ></p-inputnumber>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <p-toggleswitch formControlName="reorder_point_active" styleClass="scale-90"></p-toggleswitch>
+            <div class="flex flex-col">
+              <span class="text-xs font-semibold text-slate-700">Enable automatic reorder trigger</span>
+              <span class="text-[10px] text-slate-500">Auto-sends PO when stock falls below threshhold.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shipping Section -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <i class="pi pi-truck text-[#F16D22]"></i> Shipping & Logistics
+          </h3>
+
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-slate-700">Product Class</label>
+            <p-selectButton
+              [options]="productKindOptions"
+              formControlName="kind"
+              optionLabel="label"
+              optionValue="value"
+              styleClass="text-xs w-fit"
+            ></p-selectButton>
+          </div>
+
+          <!-- Weights and Dimensions -->
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-2" *ngIf="form.get('kind')?.value === 'physical'">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-slate-700">Weight</label>
+              <p-inputnumber
+                formControlName="weight_value"
+                mode="decimal"
+                [minFractionDigits]="0"
+                [maxFractionDigits]="2"
+                [min]="0"
+                inputStyleClass="w-full text-right bg-slate-50"
+                styleClass="w-full"
+              ></p-inputnumber>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-slate-700">Unit</label>
+              <p-select 
+                [options]="unitOptions" 
+                formControlName="weight_unit" 
+                optionLabel="label" 
+                optionValue="value"
+                styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-750 flex items-center"
+              ></p-select>
+            </div>
+            <div class="col-span-1 sm:col-span-2">
+              <!-- Grid dimensions -->
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-700">Box Dimensions (L x W x H cm)</label>
+                <div class="flex gap-2">
+                  <p-inputnumber formControlName="length_cm" placeholder="L" [min]="0" inputStyleClass="w-full text-center bg-slate-50" styleClass="w-full flex-1"></p-inputnumber>
+                  <p-inputnumber formControlName="width_cm" placeholder="W" [min]="0" inputStyleClass="w-full text-center bg-slate-50" styleClass="w-full flex-1"></p-inputnumber>
+                  <p-inputnumber formControlName="height_cm" placeholder="H" [min]="0" inputStyleClass="w-full text-center bg-slate-50" styleClass="w-full flex-1"></p-inputnumber>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PART 3: BOTTOM SECTION (Variants & Feed)   -->
+        <!-- ============================================ -->
+
+        <!-- Variants Empty / List -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <i class="pi pi-sitemap text-[#F16D22]"></i> Product Variants
+            </h3>
+            <button 
+              type="button"
+              (click)="showVariantsDialog.set(true)" 
+              class="text-xs font-semibold text-[#F16D22] hover:text-[#d65715] transition-colors"
+            >
+              Configure
+            </button>
+          </div>
+
+          <!-- Empty State -->
+          @if (productVariants().length === 0) {
+            <div class="py-10 border border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center bg-slate-50/50">
+              <i class="pi pi-sitemap text-slate-400 text-2xl mb-2.5"></i>
+              <span class="text-xs font-semibold text-slate-800">There's no variant</span>
+              <span class="text-[10px] text-slate-450 max-w-xs mt-1">Define properties like color or SSD size to create multiple purchase combinations.</span>
+              <button 
+                type="button"
+                pButton 
+                label="Add Variant Options" 
+                class="mt-4 px-3 py-1.5 bg-[#F16D22] hover:bg-[#d65715] text-white text-[10px] font-bold rounded shadow transition-all"
+                (click)="showVariantsDialog.set(true)"
+              ></button>
+            </div>
+          } @else {
+            <div class="flex flex-col gap-2.5">
+              @for (v of productVariants(); track v.id) {
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex justify-between items-center text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-slate-500">{{ v.sku }}</span>
+                    <span class="text-slate-350">|</span>
+                    <div class="flex items-center gap-1">
+                      @for (op of v.option_values; track op.valueId) {
+                        <span class="px-1.5 py-0.5 rounded bg-slate-200 text-[9px] font-medium text-slate-700">{{ op.valueName }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="font-bold text-slate-850">{{ (v.price_minor || 0) / 100 | currency }}</span>
+                    <span class="text-[9px] font-bold text-emerald-600 uppercase bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded" *ngIf="v.is_default">Default</span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Activity Feed / Comments section -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <i class="pi pi-comments text-[#F16D22]"></i> Activity Feed & Notes
+          </h3>
+
+          <!-- Post comment -->
+          <div class="flex flex-col gap-2">
+            <textarea 
+              [(ngModel)]="newCommentText"
+              [ngModelOptions]="{standalone: true}"
+              placeholder="Post a staff comment (markdown and @mentions supported)..." 
+              rows="3"
+              class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-[#F16D22]/60 placeholder-slate-400 resize-none"
+            ></textarea>
+            <button 
+              type="button"
+              pButton 
+              label="Post Comment" 
+              [disabled]="!newCommentText().trim()"
+              class="self-end px-3 py-1.5 bg-slate-100 border border-slate-300 hover:bg-slate-200 text-slate-650 text-xs font-bold rounded-lg transition-all"
+              (click)="postComment()"
+            ></button>
+          </div>
+
+          <!-- Feed comments -->
+          <div class="flex flex-col gap-4 mt-2">
+            @for (com of comments(); track com.id) {
+              <div class="flex gap-3 text-xs border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                <img [src]="com.author_avatar" alt="Avatar" class="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                <div class="flex-1 flex flex-col gap-1">
+                  <div class="flex items-baseline justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-slate-800">{{ com.author_name }}</span>
+                      <span class="text-[9px] bg-slate-100 text-slate-500 px-1 rounded font-bold border border-slate-200" *ngIf="com.is_staff">STAFF</span>
+                    </div>
+                    <span class="text-[10px] text-slate-450 font-medium">{{ com.created_at | date: 'short' }}</span>
+                  </div>
+                  <p class="text-slate-600 leading-relaxed text-[11px]">{{ com.content }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: STATS RAIL & ORGANIZATION -->
+      <div class="col-span-1 flex flex-col gap-6">
+        
+        <!-- 7-Day Sparkline line card (only meaningful once the product has real sales history) -->
+        @if (isEditMode()) {
+          <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+            <div>
+              <span class="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Weekly Unit Sales</span>
+              <div class="text-lg font-bold text-slate-900 mt-0.5">{{ weeklyUnitsSold() }} Units Sold</div>
+            </div>
+            <div class="h-16 relative">
+              <p-chart type="line" [data]="sparklineData" [options]="sparklineOptions" class="w-full h-full"></p-chart>
+            </div>
+          </div>
+        }
+
+        <!-- Product Organization -->
+        <div class="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Classification</h3>
+            <a routerLink="/products/taxonomy" class="text-[10px] font-semibold text-[#F16D22] hover:text-[#d65715] transition-colors">
+              Manage
+            </a>
+          </div>
+
+          <!-- Status -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Status</label>
+            <p-select 
+              [options]="statusOptions" 
+              formControlName="status" 
+              optionLabel="label" 
+              optionValue="value"
+              styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-700 flex items-center"
+            ></p-select>
+          </div>
+
+          <!-- Category -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Category</label>
+            <p-select 
+              [options]="categories()" 
+              formControlName="category_id" 
+              optionLabel="name" 
+              optionValue="id"
+              placeholder="Select Category"
+              styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-700 flex items-center"
+            ></p-select>
+          </div>
+
+          <!-- Vendor -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Vendor</label>
+            <p-select 
+              [options]="vendors()" 
+              formControlName="vendor_id" 
+              optionLabel="name" 
+              optionValue="id"
+              placeholder="Select Vendor"
+              styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-700 flex items-center"
+            ></p-select>
+          </div>
+
+          <!-- Type -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Product Type</label>
+            <p-select 
+              [options]="productTypes()" 
+              formControlName="type_id" 
+              optionLabel="name" 
+              optionValue="id"
+              placeholder="Select Type"
+              styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-700 flex items-center"
+            ></p-select>
+          </div>
+
+          <!-- Channels (Multiselect) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Sales Channels</label>
+              <button type="button" (click)="openQuickAdd('channel')" class="text-[10px] font-semibold text-[#F16D22] hover:text-[#d65715] transition-colors flex items-center gap-0.5">
+                <i class="pi pi-plus text-[9px]"></i> New
+              </button>
+            </div>
+            <p-multiselect
+              [options]="channelsList()"
+              formControlName="channels"
+              optionLabel="name"
+              optionValue="id"
+              placeholder="Select Channels"
+              styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-700 flex items-center"
+            ></p-multiselect>
+          </div>
+
+          <!-- Tags (Multiselect) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Tag Classifiers</label>
+              <button type="button" (click)="openQuickAdd('tag')" class="text-[10px] font-semibold text-[#F16D22] hover:text-[#d65715] transition-colors flex items-center gap-0.5">
+                <i class="pi pi-plus text-[9px]"></i> New
+              </button>
+            </div>
+            <p-multiselect
+              [options]="tagsList()"
+              formControlName="tags"
+              optionLabel="name"
+              optionValue="id"
+              placeholder="Add Tags"
+              styleClass="w-full h-9 text-xs bg-slate-50 border-slate-200 text-slate-700 flex items-center"
+            ></p-multiselect>
+          </div>
+
+          <div class="flex items-center gap-3 pt-2">
+            <p-toggleswitch formControlName="is_dropship" styleClass="scale-90"></p-toggleswitch>
+            <div class="flex flex-col">
+              <span class="text-xs font-semibold text-slate-700"> Dropshipping Product</span>
+              <span class="text-[9px] text-slate-400 font-medium">Fulfilled automatically by marketplace.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </form>
+
+</div>
+
+<!-- Image Selection modal -->
+<p-dialog 
+  [visible]="showAddImageDialog()" 
+  (visibleChange)="showAddImageDialog.set($event)"
+  [modal]="true" 
+  [draggable]="false" 
+  [resizable]="false"
+  header="Choose Image Resource"
+  styleClass="w-full max-w-2xl bg-white text-slate-700 border border-slate-200 p-0 shadow-xl"
+  contentStyleClass="p-0 bg-white"
+  headerStyleClass="hidden"
+>
+  <app-add-image-panel 
+    (imageAdded)="addImageUrl($event)"
+    (cancel)="showAddImageDialog.set(false)"
+  ></app-add-image-panel>
+</p-dialog>
+
+<!-- Variants modal -->
+<app-add-product-variants-dialog
+  *ngIf="showVariantsDialog() && form.get('name')?.value"
+  [(visible)]="showVariantsDialog"
+  [product]="getVariantsProduct()"
+  (variantsSaved)="loadProductDetails(productId())"
+></app-add-product-variants-dialog>
+
+<!-- Quick-add Channel / Tag modal -->
+<p-dialog
+  [visible]="showQuickAddDialog()"
+  (visibleChange)="showQuickAddDialog.set($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [dismissableMask]="true"
+  [style]="{ width: '26rem' }"
+  styleClass="font-sans"
+>
+  <ng-template pTemplate="header">
+    <div class="flex items-start gap-3">
+      <div class="w-11 h-11 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F16D22] shrink-0">
+        <i class="pi pi-plus text-lg"></i>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-base font-bold text-slate-900">{{ quickAddKind() === 'channel' ? 'New Sales Channel' : 'New Tag' }}</span>
+        <span class="text-xs text-slate-500 mt-0.5">Gets selected on this product right away.</span>
+      </div>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-4 py-2 text-slate-700">
+    <div class="flex flex-col gap-1.5">
+      <label class="text-xs font-bold text-slate-900">Name <span class="text-red-500">*</span></label>
+      <input
+        pInputText
+        [ngModel]="quickAddName()"
+        [ngModelOptions]="{standalone: true}"
+        (ngModelChange)="quickAddName.set($event)"
+        [placeholder]="quickAddKind() === 'channel' ? 'e.g. Instagram Shop' : 'e.g. Bestseller'"
+        class="w-full bg-white text-xs"
+      />
+    </div>
+
+    @if (quickAddKind() === 'channel') {
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Channel Type</label>
+        <p-select
+          [options]="channelKindOptions"
+          [ngModel]="quickAddChannelKind()"
+          [ngModelOptions]="{standalone: true}"
+          (ngModelChange)="quickAddChannelKind.set($event)"
+          optionLabel="label"
+          optionValue="value"
+          styleClass="w-full"
+        ></p-select>
+      </div>
+    }
+
+    @if (quickAddError()) {
+      <div class="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+        {{ quickAddError() }}
+      </div>
+    }
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex items-center justify-end w-full gap-2">
+      <p-button label="Cancel" [text]="true" severity="secondary" size="small" (onClick)="showQuickAddDialog.set(false)"></p-button>
+      <p-button label="Add & Select" size="small" [disabled]="!quickAddName().trim() || quickAddSaving()" [loading]="quickAddSaving()" (onClick)="saveQuickAdd()"></p-button>
+    </div>
+  </ng-template>
+</p-dialog>

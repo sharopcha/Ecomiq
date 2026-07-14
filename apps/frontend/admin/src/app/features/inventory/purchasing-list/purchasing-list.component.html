@@ -1,0 +1,75 @@
+<div class="p-6 max-w-[1600px] mx-auto text-slate-700">
+  
+  <!-- PAGE HEADER -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-bold tracking-tight text-slate-900">
+        Purchase Orders
+      </h1>
+      <div class="flex items-center gap-1">
+        <button class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-650 transition-colors cursor-pointer">
+          <i class="pi pi-ellipsis-h text-sm"></i>
+        </button>
+        <button class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-650 transition-colors cursor-pointer">
+          <i class="pi pi-download text-sm"></i>
+        </button>
+      </div>
+    </div>
+    <button
+      (click)="createPO()"
+      class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] text-xs font-bold rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+    >
+      <i class="pi pi-plus text-xs"></i>
+      <span>Create PO</span>
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="p-16 border border-slate-200 rounded-2xl text-center bg-white shadow-sm">
+      <i class="pi pi-spin pi-spinner text-slate-400 text-2xl"></i>
+    </div>
+  } @else if (pos().length === 0) {
+    <div class="p-16 border border-dashed border-slate-200 rounded-2xl text-center flex flex-col items-center justify-center bg-white shadow-sm">
+      <i class="pi pi-inbox text-slate-400 text-3xl mb-3"></i>
+      <span class="text-sm font-semibold text-slate-800">No purchase orders yet</span>
+      <span class="text-xs text-slate-400 mt-1">Create your first PO to start ordering stock from suppliers.</span>
+    </div>
+  } @else {
+    <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+      <p-table [value]="pos()" [paginator]="true" [rows]="15" styleClass="p-datatable-sm text-xs">
+        <ng-template pTemplate="header">
+          <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[11px] tracking-wide uppercase">
+            <th class="py-3.5 px-4 text-left">PO Number <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-left">Date <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-left">Supplier <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-left">Expected <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-right">Amount <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-center w-24">Status <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-right w-16"></th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-po>
+          <tr class="border-b border-slate-150 hover:bg-slate-50/60 transition-colors text-slate-700 cursor-pointer">
+            <td class="py-3.5 px-4 font-bold text-slate-900 hover:text-[#F16D22] transition-colors">{{ po.id | uppercase }}</td>
+            <td class="py-3.5 px-4 text-slate-600">{{ po.created_at | date:'MMM d, y' }}</td>
+            <td class="py-3.5 px-4">
+              <a [routerLink]="['/inventory/suppliers', po.supplier_id]" class="text-[#F16D22] hover:underline font-medium">
+                {{ po.supplier_name }}
+              </a>
+            </td>
+            <td class="py-3.5 px-4 text-slate-600">{{ po.expected_delivery ? (po.expected_delivery | date:'MMM d, y') : '-' }}</td>
+            <td class="py-3.5 px-4 font-semibold text-slate-800 text-right">${{ po.total_amount_minor / 100 | number:'1.2-2' }}</td>
+            <td class="py-3.5 px-4 text-center">
+              <span [class]="statusBadgeClass(po.status)">{{ po.status | uppercase }}</span>
+            </td>
+            <td class="py-3.5 px-4 text-right">
+              <button class="w-7 h-7 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer">
+                <i class="pi pi-ellipsis-h text-xs"></i>
+              </button>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>

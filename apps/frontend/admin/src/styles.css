@@ -1,0 +1,214 @@
+@layer theme, tailwind-base, primeng, tailwind-utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(tailwind-base);
+@import "tailwindcss/utilities.css" layer(tailwind-utilities);
+
+/* PrimeIcons */
+@import "primeicons/primeicons.css";
+
+/* =====================================================================
+   Ecomiq global UI normalization
+   These rules are intentionally UNLAYERED so they win over both the
+   `primeng` and `tailwind-utilities` cascade layers. This is what makes
+   every form control share one height regardless of the per-component
+   `h-9` / `h-8` utility classes the screens were originally built with.
+   ===================================================================== */
+
+:root {
+  --ecomiq-field-height: 2.25rem;
+  /* 36px — compact field height matching the mockups */
+  --ecomiq-field-radius: 8px;
+  --ecomiq-field-font: 0.8125rem;
+  /* 13px */
+  --ecomiq-orange: #f16d22;
+  --ecomiq-navy: #0d0d1c;
+}
+
+/* ---- Equal, compact form controls ------------------------------------ */
+/* Single-value selects get a fixed height so they line up exactly with inputs. */
+.p-select,
+.p-treeselect {
+  min-height: var(--ecomiq-field-height);
+  height: var(--ecomiq-field-height);
+  border-radius: var(--ecomiq-field-radius);
+  align-items: center;
+  font-size: var(--ecomiq-field-font);
+}
+
+/* Multiselect can hold several chips, so let it grow from the same base height. */
+.p-multiselect {
+  min-height: var(--ecomiq-field-height);
+  border-radius: var(--ecomiq-field-radius);
+  align-items: center;
+  font-size: var(--ecomiq-field-font);
+}
+
+/* PrimeNG-styled text inputs, number inputs, date pickers, passwords */
+input.p-inputtext,
+.p-inputnumber-input,
+.p-datepicker-input,
+.p-password-input,
+.p-iconfield input.p-inputtext {
+  height: var(--ecomiq-field-height);
+  border-radius: var(--ecomiq-field-radius);
+  font-size: var(--ecomiq-field-font);
+}
+
+/* Textareas keep their own height but pick up the shared radius + font */
+textarea.p-inputtext {
+  min-height: var(--ecomiq-field-height);
+  border-radius: var(--ecomiq-field-radius);
+  font-size: var(--ecomiq-field-font);
+}
+
+/* Vertically centre the value/label inside selects so it lines up with inputs */
+.p-select-label,
+.p-multiselect-label,
+.p-treeselect-label {
+  display: flex;
+  align-items: center;
+  font-size: var(--ecomiq-field-font);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Compact dropdown trigger + overlay option rows */
+.p-select-dropdown,
+.p-multiselect-dropdown {
+  width: 2rem;
+}
+
+.p-select-overlay .p-select-option,
+.p-multiselect-overlay .p-multiselect-option {
+  font-size: var(--ecomiq-field-font);
+}
+
+/* Input-group addons (e.g. the "$" on price) share the field height */
+.p-inputgroup>.p-inputgroupaddon {
+  min-width: 2.25rem;
+  padding: 0 0.625rem;
+  font-size: var(--ecomiq-field-font);
+}
+
+/* ---- Dialog polish to match the mockups ------------------------------ */
+.p-dialog {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.p-dialog .p-dialog-header {
+  padding: 1rem 1.25rem 0.5rem 1.25rem;
+}
+
+.p-dialog .p-dialog-content {
+  padding: 0.5rem 1.25rem 1rem 1.25rem;
+}
+
+.p-dialog .p-dialog-footer {
+  padding: 0.75rem 1.25rem 1rem 1.25rem;
+  border-top: 1px solid var(--p-surface-200, #e2e8f0);
+}
+
+/* ---- Brand helpers --------------------------------------------------- */
+.ecomiq-ai-gradient {
+  background-image: linear-gradient(90deg, #6422f1 0%, #b133de 50%, #7433de 100%);
+}
+
+.ecomiq-ai-text {
+  background-image: linear-gradient(90deg, #6422f1 0%, #b133de 50%, #7433de 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---- Tooltip customization ----------------------------------------- */
+.p-tooltip {
+  font-size: 0.7rem !important;
+  /* Smaller text size (approx 11px) */
+  font-weight: 500 !important;
+  pointer-events: none !important;
+}
+
+.p-tooltip .p-tooltip-text {
+  padding: 0.2rem 0.45rem !important;
+  /* Very tight, premium padding */
+  background: #0d0d1c !important;
+  /* Brand dark navy background */
+  color: #ffffff !important;
+  border-radius: 5px !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.15) !important;
+}
+
+/* Match the tooltip arrows to the dark navy background */
+.p-tooltip-right .p-tooltip-arrow,
+.p-tooltip-right-arrow {
+  border-right-color: #0d0d1c !important;
+}
+
+.p-tooltip-left .p-tooltip-arrow,
+.p-tooltip-left-arrow {
+  border-left-color: #0d0d1c !important;
+}
+
+.p-tooltip-top .p-tooltip-arrow,
+.p-tooltip-top-arrow {
+  border-top-color: #0d0d1c !important;
+}
+
+.p-tooltip-bottom .p-tooltip-arrow,
+.p-tooltip-bottom-arrow {
+  border-bottom-color: #0d0d1c !important;
+}
+
+/* ---- Pill Selects ---------------------------------------------------- */
+.orders-pill-select .p-select,
+.orders-pill-select.p-select,
+.orders-pill-select {
+  min-height: 2rem !important;
+  /* 32px */
+  height: 2rem !important;
+  /* 32px */
+  border-radius: 9999px !important;
+  /* Fully rounded pill */
+  overflow: hidden !important;
+  /* Crop children to pill shape */
+  padding-left: 0.25rem !important;
+  padding-right: 0.25rem !important;
+  border-color: #e2e8f0 !important;
+  background-color: #f8fafc !important;
+  font-size: 0.75rem !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+.orders-pill-select .p-select:hover,
+.orders-pill-select:hover {
+  border-color: #cbd5e1 !important;
+}
+
+.orders-pill-select .p-select.p-focus,
+.orders-pill-select.p-focus {
+  border-color: #f16d22 !important;
+}
+
+.orders-pill-select .p-select-label,
+.orders-pill-select .p-select-label-container {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+  padding: 0 0.5rem !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.orders-pill-select .p-select-dropdown {
+  width: 1.5rem !important;
+}
+
+.orders-pill-select .p-select-dropdown .pi {
+  font-size: 0.65rem !important;
+  color: #64748b !important;
+}

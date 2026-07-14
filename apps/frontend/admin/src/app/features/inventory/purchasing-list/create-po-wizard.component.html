@@ -1,0 +1,143 @@
+<div class="flex-1 p-8 bg-slate-50 min-h-screen">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-6 flex items-center gap-4">
+      <button pButton icon="pi pi-arrow-left" class="p-button-text p-button-plain p-button-rounded" (click)="goBack()"></button>
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Create Purchase Order</h1>
+        <p class="text-slate-500">Follow the steps to issue a new PO to a supplier.</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      
+      <!-- Custom Stepper Header -->
+      <div class="flex items-center gap-8 mb-8 border-b border-slate-100 pb-4">
+        <div class="flex items-center gap-2 cursor-pointer transition-colors" [ngClass]="step() === 1 ? 'text-[#F16D22] font-bold' : 'text-slate-500 hover:text-slate-700'" (click)="step.set(1)">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm" [ngClass]="step() === 1 ? 'bg-[#F16D22] text-white' : 'bg-slate-100 text-slate-500'">1</div>
+          <span>Details</span>
+        </div>
+        <i class="pi pi-angle-right text-slate-300"></i>
+        <div class="flex items-center gap-2 cursor-pointer transition-colors" [ngClass]="step() === 2 ? 'text-[#F16D22] font-bold' : 'text-slate-500 hover:text-slate-700'" (click)="selectedSupplier() && step.set(2)">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm" [ngClass]="step() === 2 ? 'bg-[#F16D22] text-white' : 'bg-slate-100 text-slate-500'">2</div>
+          <span>Products</span>
+        </div>
+        <i class="pi pi-angle-right text-slate-300"></i>
+        <div class="flex items-center gap-2 cursor-pointer transition-colors" [ngClass]="step() === 3 ? 'text-[#F16D22] font-bold' : 'text-slate-500 hover:text-slate-700'" (click)="selectedSupplier() && poItems().length > 0 && step.set(3)">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm" [ngClass]="step() === 3 ? 'bg-[#F16D22] text-white' : 'bg-slate-100 text-slate-500'">3</div>
+          <span>Send</span>
+        </div>
+      </div>
+
+      <!-- STEP 1: DETAILS -->
+      <div *ngIf="step() === 1">
+        <div class="py-4 space-y-6">
+          <div class="grid grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-2">Supplier *</label>
+              <p-select [options]="suppliers()" [(ngModel)]="selectedSupplier" optionLabel="name" placeholder="Select a Supplier" styleClass="w-full"></p-select>
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-2">Expected Delivery Date</label>
+              <p-datepicker [(ngModel)]="expectedDate" [showIcon]="true" placeholder="Select Date" styleClass="w-full"></p-datepicker>
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-2">Carrier</label>
+              <input pInputText type="text" [(ngModel)]="carrier" placeholder="e.g. FedEx, DHL" class="w-full" />
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-2">Payment Terms</label>
+              <p-select [options]="['Net 15', 'Net 30', 'Net 60', 'Due on Receipt']" [(ngModel)]="paymentTerms" styleClass="w-full"></p-select>
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-bold text-slate-700 mb-2">Notes</label>
+              <textarea pTextarea [(ngModel)]="notes" rows="3" class="w-full" placeholder="Internal or supplier notes..."></textarea>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-4 mt-6 border-t border-slate-100">
+            <button pButton label="Continue to Products" icon="pi pi-arrow-right" iconPos="right" (click)="step.set(2)" [disabled]="!selectedSupplier()"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: PRODUCTS -->
+      <div *ngIf="step() === 2">
+        <div class="py-4 grid grid-cols-1 md:grid-cols-3 gap-8">
+          <!-- Catalog Picker -->
+          <div class="col-span-1 border-r border-slate-100 pr-6">
+            <h3 class="font-bold text-slate-900 mb-4">Catalog</h3>
+            <div class="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+              <div *ngFor="let p of products()" class="p-3 border border-slate-200 rounded-lg flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition-colors">
+                <div class="flex-1 pr-2">
+                  <p class="font-bold text-slate-800 text-sm truncate">{{ p.name }}</p>
+                  <p class="text-xs text-slate-500">${{ (p.cost_minor || p.price_minor || 0) / 100 | number:'1.2-2' }}</p>
+                </div>
+                <button pButton icon="pi pi-plus" class="p-button-rounded p-button-text p-button-sm w-8 h-8 flex-shrink-0" (click)="addProduct(p)"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected Items -->
+          <div class="col-span-2">
+            <h3 class="font-bold text-slate-900 mb-4">Selected Items</h3>
+            <p-table [value]="poItems()" [scrollable]="true" scrollHeight="300px" styleClass="p-datatable-sm">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th>Product</th>
+                  <th>Qty</th>
+                  <th>Unit Cost</th>
+                  <th>Total</th>
+                  <th style="width: 3rem"></th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-item let-i="rowIndex">
+                <tr>
+                  <td class="font-medium text-slate-900">{{ item.name }}</td>
+                  <td>
+                    <input pInputText type="number" [(ngModel)]="item.qty" class="w-16 p-inputtext-sm text-center" min="1" />
+                  </td>
+                  <td>${{ item.unit_cost_minor / 100 | number:'1.2-2' }}</td>
+                  <td class="font-bold">${{ (item.qty * item.unit_cost_minor) / 100 | number:'1.2-2' }}</td>
+                  <td>
+                    <button pButton icon="pi pi-times" class="p-button-rounded p-button-danger p-button-text p-button-sm" (click)="removeProduct(i)"></button>
+                  </td>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="emptymessage">
+                <tr>
+                  <td colspan="5" class="text-center p-8 text-slate-500">Select products from the catalog to add to the PO.</td>
+                </tr>
+              </ng-template>
+            </p-table>
+
+            <div class="mt-6 p-4 bg-slate-50 rounded-lg flex justify-between items-center border border-slate-200">
+              <span class="font-bold text-slate-700">Total PO Amount:</span>
+              <span class="text-2xl font-bold text-slate-900">${{ getTotalAmountMinor() / 100 | number:'1.2-2' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between pt-4 mt-6 border-t border-slate-100">
+          <button pButton label="Back" icon="pi pi-arrow-left" class="p-button-text" (click)="step.set(1)"></button>
+          <button pButton label="Review & Send" icon="pi pi-arrow-right" iconPos="right" (click)="step.set(3)" [disabled]="poItems().length === 0"></button>
+        </div>
+      </div>
+
+      <!-- STEP 3: SEND -->
+      <div *ngIf="step() === 3">
+        <div class="py-4">
+          <app-email-composer
+            [to]="selectedSupplier()?.email || ''"
+            [subject]="'New Purchase Order from Ecomiq'"
+            [body]="emailBody"
+          ></app-email-composer>
+        </div>
+        <div class="flex justify-between pt-4 mt-6 border-t border-slate-100">
+          <button pButton label="Back" icon="pi pi-arrow-left" class="p-button-text" (click)="step.set(2)"></button>
+          <button pButton label="Send Purchase Order" icon="pi pi-send" (click)="submitPO()"></button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

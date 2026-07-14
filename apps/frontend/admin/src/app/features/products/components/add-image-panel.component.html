@@ -1,0 +1,136 @@
+<div class="bg-white rounded-xl border border-slate-200 overflow-hidden w-full max-w-2xl text-slate-700 shadow-xl">
+  <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+    <h3 class="text-sm font-semibold text-slate-800 flex items-center gap-2">
+      <i class="pi pi-image text-[#F16D22]"></i> Add Product Image
+    </h3>
+    <button (click)="cancel.emit()" class="text-slate-400 hover:text-slate-650 transition-colors">
+      <i class="pi pi-times"></i>
+    </button>
+  </div>
+
+  <p-tabs value="library" class="w-full">
+    <p-tablist class="bg-slate-50 border-b border-slate-200 px-3">
+      <p-tab value="library" class="text-xs py-3 px-4 font-medium text-slate-500 focus:outline-none">Content Library</p-tab>
+      <p-tab value="upload" class="text-xs py-3 px-4 font-medium text-slate-500 focus:outline-none">Upload</p-tab>
+      <p-tab value="unsplash" class="text-xs py-3 px-4 font-medium text-slate-500 focus:outline-none">Unsplash</p-tab>
+      <p-tab value="ai" class="text-xs py-3 px-4 font-medium text-slate-500 focus:outline-none flex items-center gap-1.5">
+        <span class="bg-gradient-to-r from-[#6422F1] via-[#B133DE] to-[#7433DE] bg-clip-text text-transparent font-bold">Generate with AI</span>
+      </p-tab>
+    </p-tablist>
+
+    <p-tabpanels class="p-5">
+      <!-- 1. CONTENT LIBRARY TAB -->
+      <p-tabpanel value="library">
+        <div class="grid grid-cols-4 gap-3 max-h-64 overflow-y-auto pr-1">
+          @for (img of libraryImages; track img) {
+            <div 
+              (click)="selectLibraryImage(img)" 
+              class="relative aspect-square rounded-lg overflow-hidden border border-slate-200 cursor-pointer hover:border-[#F16D22] hover:scale-[1.02] transition-all group"
+            >
+              <img [src]="img" alt="Library asset" class="w-full h-full object-cover" />
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <i class="pi pi-plus text-white text-lg"></i>
+              </div>
+            </div>
+          }
+        </div>
+        <p class="text-[10px] text-slate-400 mt-4 font-medium">Select an existing asset from your content library to add it to this product.</p>
+      </p-tabpanel>
+
+      <!-- 2. UPLOAD TAB -->
+      <p-tabpanel value="upload">
+        <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-8 hover:border-[#F16D22]/50 transition-all bg-slate-50/50">
+          <i class="pi pi-cloud-upload text-slate-400 text-3xl mb-3"></i>
+          <span class="text-xs font-semibold text-slate-700">Drag & drop files here</span>
+          <span class="text-[10px] text-slate-400 mt-1">PNG, JPG, WEBP up to 5MB</span>
+          
+          <div class="mt-5 w-full max-w-xs flex flex-col items-center">
+            @if (isUploading()) {
+              <div class="w-full flex flex-col gap-2 items-center">
+                <span class="text-[10px] text-slate-500 font-medium">Uploading file...</span>
+                <p-progressbar [value]="uploadProgress()" class="w-full h-2 rounded bg-slate-100 overflow-hidden" [showValue]="false"></p-progressbar>
+              </div>
+            } @else {
+              <button 
+                pButton 
+                label="Browse Files" 
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-350 transition-all" 
+                (click)="onUploadSimulate()"
+              ></button>
+            }
+          </div>
+        </div>
+      </p-tabpanel>
+
+      <!-- 3. UNSPLASH TAB -->
+      <p-tabpanel value="unsplash">
+        <div class="flex flex-col items-center justify-center p-8 text-center bg-slate-50/50 rounded-xl border border-slate-200">
+          <i class="pi pi-globe text-slate-400 text-2xl mb-2"></i>
+          <span class="text-xs text-slate-700 font-semibold">Unsplash Search</span>
+          <p class="text-[10px] text-slate-400 max-w-xs mt-1">Unsplash API connection is currently stubbed. In production, this allows direct stock image imports.</p>
+          <input 
+            type="text" 
+            placeholder="Search royalty-free photos..." 
+            class="mt-4 w-full max-w-sm px-3.5 py-1.5 bg-white border border-slate-205 rounded-lg text-xs text-slate-500 placeholder-slate-400 cursor-not-allowed" 
+            disabled 
+          />
+        </div>
+      </p-tabpanel>
+
+      <!-- 4. GENERATE WITH AI TAB -->
+      <p-tabpanel value="ai">
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-semibold text-slate-700">Describe the image you want to generate</label>
+            <textarea 
+              pTextarea 
+              [(ngModel)]="aiPrompt" 
+              placeholder="A high-quality 3D render of a futuristic headphone set, neon orange accents, dark background, cinematic lighting, studio shot..." 
+              rows="3" 
+              class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-[#F16D22]/60 placeholder-slate-400 resize-none"
+            ></textarea>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <span class="text-xs font-semibold text-slate-700">Style Preset</span>
+            <div class="flex flex-wrap gap-2">
+              @for (style of aiStyles; track style) {
+                <button 
+                  (click)="selectedStyle.set(style)" 
+                  [class]="selectedStyle() === style 
+                    ? 'px-3 py-1 text-xs font-medium rounded-full bg-[#F16D22]/20 text-[#F16D22] border border-[#F16D22]/40 transition-all'
+                    : 'px-3 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-600 border border-slate-200 hover:border-slate-350 transition-all'"
+                >
+                  {{ style }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="mt-2 flex justify-end">
+            <button 
+              pButton 
+              (click)="generateImageWithAI()" 
+              [disabled]="!aiPrompt() || isGenerating()"
+              class="relative px-6 py-2.5 rounded-lg text-white text-xs font-bold shadow-md overflow-hidden transition-all flex items-center gap-2 group"
+            >
+              <!-- AI Background Gradient -->
+              <span class="absolute inset-0 bg-gradient-to-r from-[#6422F1] via-[#B133DE] to-[#7433DE] group-hover:opacity-90 transition-opacity"></span>
+              
+              <!-- Content -->
+              <span class="relative z-10 flex items-center gap-2">
+                @if (isGenerating()) {
+                  <i class="pi pi-spin pi-spinner text-sm"></i>
+                  <span>Dreaming...</span>
+                } @else {
+                  <i class="pi pi-sparkles text-sm"></i>
+                  <span>Generate with AI</span>
+                }
+              </span>
+            </button>
+          </div>
+        </div>
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+</div>

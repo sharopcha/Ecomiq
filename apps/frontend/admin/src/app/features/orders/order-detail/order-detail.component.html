@@ -1,0 +1,258 @@
+<div class="p-6 max-w-[1200px] mx-auto text-slate-700" *ngIf="order() as orderData">
+  
+  <!-- PAGE HEADER & ACTIONS -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div class="flex items-center gap-4">
+      <a routerLink="/orders" class="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors">
+        <i class="pi pi-arrow-left text-xs"></i>
+      </a>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-slate-950 flex items-center gap-3">
+          #{{ orderData.display_number }}
+          <span [class]="getPaymentStatusClass(orderData.payment_status)">{{ orderData.payment_status }}</span>
+          <span [class]="getFulfillmentStatusClass(orderData.fulfillment_status)">{{ orderData.fulfillment_status }}</span>
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">
+          Placed on {{ orderData.order_date | date:'medium' }} from {{ orderData.channel_type }}
+        </p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <button 
+        (click)="advanceStage()"
+        *ngIf="orderData.status !== 'canceled' && orderData.status !== 'completed'"
+        class="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold rounded-lg border border-slate-200 shadow-sm transition-colors"
+      >
+        Advance Stage
+      </button>
+      <button 
+        (click)="confirmOrder()"
+        *ngIf="orderData.status === 'draft' || orderData.status === 'open'"
+        class="px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 text-xs font-bold rounded-lg shadow-sm transition-colors"
+      >
+        Confirm Order
+      </button>
+      <button 
+        (click)="cancelOrder()"
+        *ngIf="orderData.status !== 'canceled'"
+        class="px-4 py-2 bg-white text-red-600 hover:bg-red-50 border border-red-200 text-xs font-bold rounded-lg shadow-sm transition-colors"
+      >
+        Cancel Order
+      </button>
+    </div>
+  </div>
+
+  <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($any($event))">
+    <p-tablist>
+      <p-tab value="details">Details</p-tab>
+      <p-tab value="timeline">Timeline</p-tab>
+    </p-tablist>
+
+    <p-tabpanels>
+      <!-- DETAILS TAB -->
+      <p-tabpanel value="details">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- LEFT COLUMN: Items & Summary -->
+          <div class="lg:col-span-2 flex flex-col gap-6">
+            
+            <!-- Items Card -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h2 class="text-sm font-bold text-slate-800">Order Items ({{ itemsCount() }})</h2>
+                <button class="text-[#F16D22] text-xs font-semibold hover:underline">Edit Items</button>
+              </div>
+              
+              <p-table [value]="orderData.lines" styleClass="p-datatable-sm text-xs border-none">
+                <ng-template pTemplate="header">
+                  <tr class="bg-white border-b border-slate-100 text-slate-500 font-medium">
+                    <th class="py-3 px-5 text-left">Product</th>
+                    <th class="py-3 px-5 text-center w-24">Price</th>
+                    <th class="py-3 px-5 text-center w-24">Qty</th>
+                    <th class="py-3 px-5 text-right w-28">Total</th>
+                  </tr>
+                </ng-template>
+                <ng-template pTemplate="body" let-line>
+                  <tr class="border-b border-slate-50 hover:bg-slate-50/50">
+                    <td class="py-3 px-5">
+                      <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-400">
+                          <i class="pi pi-image text-sm"></i>
+                        </div>
+                        <div>
+                          <div class="font-bold text-slate-800">{{ line.name }}</div>
+                          <div class="text-[10px] text-slate-500">{{ line.variant_label || line.sku }}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-5 text-center text-slate-600">
+                      {{ (line.unit_price_minor || 0) / 100 | currency:orderData.currency }}
+                    </td>
+                    <td class="py-3 px-5 text-center font-medium">
+                      {{ line.qty }}
+                    </td>
+                    <td class="py-3 px-5 text-right font-bold text-slate-800">
+                      {{ ((line.unit_price_minor || 0) * line.qty) / 100 | currency:orderData.currency }}
+                    </td>
+                  </tr>
+                </ng-template>
+              </p-table>
+            </div>
+
+            <!-- Financial Summary -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div class="px-5 py-4 border-b border-slate-100 bg-slate-50">
+                <h2 class="text-sm font-bold text-slate-800">Payment</h2>
+              </div>
+              <div class="p-5 flex flex-col gap-3 text-sm">
+                <div class="flex justify-between text-slate-600">
+                  <span>Subtotal</span>
+                  <span>{{ (orderData.subtotal_minor || 0) / 100 | currency:orderData.currency }}</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span>Shipping ({{ orderData.shipping_type || 'Standard' }})</span>
+                  <span>{{ (orderData.shipping_fee_minor || 0) / 100 | currency:orderData.currency }}</span>
+                </div>
+                <div class="flex justify-between text-slate-600" *ngIf="orderData.discount_minor > 0">
+                  <span class="text-emerald-600 flex items-center gap-1">
+                    <i class="pi pi-tag text-xs"></i> Discount ({{ orderData.discount_code }})
+                  </span>
+                  <span class="text-emerald-600">-{{ (orderData.discount_minor || 0) / 100 | currency:orderData.currency }}</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span>Tax</span>
+                  <span>{{ (orderData.tax_minor || 0) / 100 | currency:orderData.currency }}</span>
+                </div>
+                <div class="pt-3 mt-1 border-t border-slate-100 flex justify-between font-bold text-slate-900 text-base">
+                  <span>Total</span>
+                  <span>{{ (orderData.total_minor || 0) / 100 | currency:orderData.currency }}</span>
+                </div>
+              </div>
+              <div class="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-3">
+                <button class="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg shadow-sm transition-colors">Mark as Paid</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN: Customer & Notes -->
+          <div class="flex flex-col gap-6">
+            
+            <!-- Customer Card -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-bold text-slate-800">Customer</h2>
+                <button class="text-[#F16D22] text-xs font-semibold hover:underline">Edit</button>
+              </div>
+              
+              <div *ngIf="customer(); else noCustomer">
+                <div class="font-semibold text-slate-800">{{ customer().name }}</div>
+                <div class="text-sm text-slate-600 mt-1">{{ customer().orders_count }} orders ({{ customer().total_spent_minor / 100 | currency }})</div>
+                
+                <div class="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2 text-sm text-slate-600">
+                  <div class="flex items-center gap-2">
+                    <i class="pi pi-envelope text-slate-400"></i>
+                    <a [href]="'mailto:' + customer().email" class="hover:text-[#F16D22]">{{ customer().email }}</a>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <i class="pi pi-phone text-slate-400"></i>
+                    <span>{{ customer().phone }}</span>
+                  </div>
+                </div>
+              </div>
+              <ng-template #noCustomer>
+                <div class="text-sm text-slate-500 italic">No customer linked</div>
+              </ng-template>
+
+              <div class="mt-4 pt-4 border-t border-slate-100">
+                <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wide mb-2">Shipping Address</h3>
+                <div class="text-sm text-slate-600 leading-relaxed" *ngIf="orderData.shipping_address; else noAddress">
+                  <!-- Note: Assuming standard address shape for display -->
+                  {{ $any(orderData.shipping_address)['name'] }}<br>
+                  {{ $any(orderData.shipping_address)['street'] }}<br>
+                  {{ $any(orderData.shipping_address)['city'] }}, {{ $any(orderData.shipping_address)['state'] }} {{ $any(orderData.shipping_address)['zip'] }}<br>
+                  {{ $any(orderData.shipping_address)['country'] }}
+                </div>
+                <ng-template #noAddress>
+                  <div class="text-sm text-slate-500 italic">No shipping address provided</div>
+                </ng-template>
+              </div>
+            </div>
+
+            <!-- Tags Card -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+              <h2 class="text-sm font-bold text-slate-800 mb-3">Tags</h2>
+              <div class="flex flex-wrap gap-2 mb-3">
+                <div *ngFor="let tag of orderData.tags" class="flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium border border-slate-200">
+                  {{ tag.name }}
+                  <button (click)="removeTag(tag.id)" class="hover:text-red-500"><i class="pi pi-times text-[10px]"></i></button>
+                </div>
+                <div *ngIf="!orderData.tags.length" class="text-xs text-slate-500 italic mt-1">No tags</div>
+              </div>
+              <div class="flex gap-2">
+                <input type="text" [(ngModel)]="newTag" placeholder="Add a tag..." class="flex-1 h-8 px-2 border border-slate-300 rounded text-xs" (keyup.enter)="addTag()">
+                <button (click)="addTag()" class="h-8 px-3 bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200 rounded text-xs font-bold">Add</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </p-tabpanel>
+
+      <!-- TIMELINE TAB -->
+      <p-tabpanel value="timeline">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-3xl">
+          <h2 class="text-lg font-bold text-slate-800 mb-6">Order Timeline & Comments</h2>
+          
+          <!-- Comments List -->
+          <div class="flex flex-col gap-5 mb-8">
+            <div *ngFor="let comment of comments()" class="flex gap-4">
+              <div class="w-8 h-8 rounded-full bg-[#F16D22]/10 text-[#F16D22] flex items-center justify-center font-bold text-sm border border-[#F16D22]/20 shrink-0">
+                {{ (comment.author_id | slice:0:1) || '?' }}
+              </div>
+              <div>
+                <div class="flex items-baseline gap-2 mb-1">
+                  <span class="font-bold text-slate-800 text-sm">{{ comment.author_id }}</span>
+                  <span class="text-xs text-slate-400">{{ comment.created_at | date:'medium' }}</span>
+                </div>
+                <div class="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  {{ comment.content }}
+                </div>
+              </div>
+            </div>
+            <div *ngIf="!comments().length" class="text-sm text-slate-500 italic p-4 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              No comments or events yet.
+            </div>
+          </div>
+
+          <!-- Add Comment -->
+          <div class="border-t border-slate-100 pt-6">
+            <h3 class="text-sm font-bold text-slate-800 mb-2">Leave a comment</h3>
+            <textarea 
+              [(ngModel)]="newComment"
+              rows="3" 
+              class="w-full p-3 border border-slate-300 rounded-lg text-sm mb-3 focus:outline-none focus:border-[#F16D22]/60 resize-none"
+              placeholder="Write a note about this order..."
+            ></textarea>
+            <div class="flex justify-end">
+              <button 
+                (click)="addComment()"
+                [disabled]="!newComment().trim()"
+                class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold rounded-lg shadow-sm transition-colors"
+              >
+                Post Comment
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+
+</div>
+
+<div *ngIf="!order()" class="p-16 flex items-center justify-center">
+  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F16D22]"></div>
+</div>

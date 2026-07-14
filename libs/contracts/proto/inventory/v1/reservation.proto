@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+// ecomiq.inventory.v1 — versioned in the package name from day one (ADR-7 /
+// ADR-8: gRPC for the sync saga calls only, REST stays at the gateway
+// edge). This is the first proto in
+// libs/contracts; marketing (ValidateDiscount) and payment
+// (CreatePaymentIntent) protos land in their own files here once those
+// services are built, following the same layout/codegen pipeline.
+package ecomiq.inventory.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Backs order-service's checkout saga (ADR-7): a synchronous call per order
+// line to hold stock before payment, and its compensating action if a later
+// saga step fails. The server side lives in inventory-service
+// (reservation-grpc.controller.ts), translating these messages onto
+// the existing ReservationsService.create()/release() — all
+// locking/negative-guard/outbox logic already lives there, this contract
+// doesn't change any of it.
+service ReservationService {
+  rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse);
+  rpc ReleaseReservation(ReleaseReservationRequest) returns (ReleaseReservationResponse);
+}
+
+message ReserveStockRequest {
+  string store_id = 1;
+  string variant_id = 2;
+  // Omitted = let inventory-service pick a location for this variant.
+  // Set explicitly when the
+  // caller already knows which warehouse should fulfill the line.
+  optional string location_id = 3;
+  int32 qty = 4;
+  string order_id = 5;
+  string order_line_id = 6;
+  // Required. Retrying the same saga step (timeout, redelivery) must not
+  // double-reserve — keying on this makes ReserveStock safe to retry.
+  string idempotency_key = 7;
+}
+
+message ReserveStockResponse {
+  // Insufficient stock (and friends below) are expected saga outcomes the
+  // caller must branch on, not exceptions — a typed oneof instead of only a
+  // gRPC error status. Auth/not-found/malformed-request failures are still
+  // surfaced as gRPC status codes (see reservation-grpc.controller.ts);
+  // `failure` here is specifically business-rule outcomes.
+  oneof result {
+    ReservationReserved reserved = 1;
+    ReservationFailure failure = 2;
+  }
+}
+
+message ReservationReserved {
+  string reservation_id = 1;
+  google.protobuf.Timestamp reserved_until = 2;
+}
+
+message ReservationFailure {
+  ReservationFailureReason reason = 1;
+  string message = 2;
+}
+
+enum ReservationFailureReason {
+  RESERVATION_FAILURE_REASON_UNSPECIFIED = 0;
+  INSUFFICIENT_STOCK = 1;
+  VARIANT_NOT_FOUND = 2;
+  LOCATION_NOT_FOUND = 3;
+}
+
+message ReleaseReservationRequest {
+  string store_id = 1;
+  string reservation_id = 2;
+  // Same retry-safety purpose as ReserveStockRequest's — releasing twice
+  // must not double-decrement `reserved` (ReservationsService.release()
+  // already refuses an already-released reservation; this lets a retried
+  // call observe that as "already done" rather than a saga-visible error).
+  string idempotency_key = 3;
+}
+
+message ReleaseReservationResponse {
+  oneof result {
+    ReservationReleased released = 1;
+    ReservationFailure failure = 2;
+  }
+}
+
+message ReservationReleased {
+  string reservation_id = 1;
+  google.protobuf.Timestamp released_at = 2;
+}

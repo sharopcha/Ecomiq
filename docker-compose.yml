@@ -1,0 +1,954 @@
+name: ecomiq
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecomiq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecomiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      # Phase 1 adds catalog_db alongside identity_db; more service DB names
+      # get appended here (comma-separated) as each service comes online.
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES:-identity_db,catalog_db,inventory_db,order_db,payment_db,shipping_db,purchasing_db,crm_db,notification_db,media_db,cms_db,marketing_db,analytics_db,ai_db,automation_db,support_db}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - ecomiq_postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ecomiq}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: ecomiq-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - ecomiq_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    # mailhog/mailhog is unmaintained upstream and only ships linux/amd64 images
+    # (hence the platform warning on Apple Silicon). Mailpit is an actively
+    # maintained, arm64-native drop-in: same SMTP/HTTP ports, same purpose.
+    image: axllent/mailpit:latest
+    container_name: ecomiq-mailhog
+    restart: unless-stopped
+    ports:
+      - '${MAILHOG_SMTP_PORT:-1025}:1025' # SMTP - point notification/identity services here in dev
+      - '${MAILHOG_UI_PORT:-8025}:8025' # Web UI to inspect sent emails (verify/reset/invite)
+
+  adminer:
+    image: adminer:4
+    container_name: ecomiq-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - '${ADMINER_PORT:-8081}:8080'
+    depends_on:
+      - postgres
+
+  pulsar:
+    # Plain `pulsar` (not `pulsar-all`) standalone image: broker + embedded
+    # ZK/BookKeeper in one process, no Functions worker or tiered/stream
+    # storage — that's all we need for the outbox-relay -> topic -> consumer
+    # path. Flags below keep the dev container lighter by skipping the
+    # features we don't use.
+    image: apachepulsar/pulsar:4.2.1
+    container_name: ecomiq-pulsar
+    restart: unless-stopped
+    command:
+      ['bin/pulsar', 'standalone', '--no-functions-worker', '--no-stream-storage']
+    ports:
+      - '${PULSAR_PORT:-6650}:6650' # binary protocol - services publish/consume here
+      - '${PULSAR_ADMIN_PORT:-8080}:8080' # HTTP admin API + health checks
+    volumes:
+      - ecomiq_pulsar_data:/pulsar/data
+    healthcheck:
+      test: ['CMD', 'bin/pulsar-admin', 'brokers', 'healthcheck']
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  minio:
+    # media-service's S3-compatible object store (ECOMIQ-MEDIA-PLAN.md §0/§1
+    # — user requirement 2026-07-14). Console on 9001 is the human-facing
+    # bucket browser (http://localhost:9001, MINIO_ROOT_USER/PASSWORD); API
+    # on 9000 is what both media-service (internal, `http://minio:9000`) and
+    # the browser (public presigned URLs, `http://localhost:9000`) talk to —
+    # same port, two different reachable addresses, which is exactly the
+    # presign gotcha the plan calls out.
+    image: minio/minio:latest
+    container_name: ecomiq-minio
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ecomiq}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ecomiq123}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - ecomiq_minio_data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio-init:
+    # One-shot: creates the `ecomiq-media` bucket and applies CORS, then
+    # exits (no restart policy, no port, no healthcheck — it's not a
+    # long-running service). Mirrors postgres's init-multiple-dbs.sh in
+    # spirit (mount a script, run once against a real container) but as its
+    # own container rather than an entrypoint hook, since minio/minio's
+    # image doesn't ship the `mc` CLI needed to create buckets.
+    image: minio/mc:latest
+    container_name: ecomiq-minio-init
+    entrypoint: ['/bin/sh', '/init.sh']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ecomiq}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ecomiq123}
+      MEDIA_S3_BUCKET: ${MEDIA_S3_BUCKET:-ecomiq-media}
+      MEDIA_S3_CORS_ORIGINS: ${MEDIA_S3_CORS_ORIGINS:-http://localhost:4200,http://localhost:4300}
+    volumes:
+      - ./infra/minio/init.sh:/init.sh:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: apps/services/identity/Dockerfile
+    container_name: ecomiq-identity-service
+    restart: unless-stopped
+    environment:
+      # NODE_ENV intentionally left as development, not production: no
+      # migrations exist yet for this service (see catalog-service's own
+      # note) — data-source.ts only auto-syncs the schema when
+      # NODE_ENV !== 'production'. Flip this once real migrations land.
+      NODE_ENV: development
+      IDENTITY_PORT: ${IDENTITY_PORT:-3001}
+      IDENTITY_DB_HOST: postgres
+      IDENTITY_DB_PORT: 5432
+      IDENTITY_DB_USER: ${POSTGRES_USER:-ecomiq}
+      IDENTITY_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      IDENTITY_DB_NAME: ${IDENTITY_DB_NAME:-identity_db}
+      REDIS_HOST: redis
+      REDIS_PORT_APP: 6379
+      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-apps/services/identity/keys/private.pem}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-apps/services/identity/keys/public.pem}
+      JWT_KID: ${JWT_KID:-identity-key-1}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      JWT_INTERNAL_TTL: ${JWT_INTERNAL_TTL:-5m}
+      REFRESH_TOKEN_COOKIE_NAME: ${REFRESH_TOKEN_COOKIE_NAME:-ecomiq_rt}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/api/auth/google/callback}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_FROM: ${SMTP_FROM:-Ecomiq <no-reply@ecomiq.dev>}
+      APP_WEB_URL: ${APP_WEB_URL:-http://localhost:4200}
+    ports:
+      - '${IDENTITY_PORT:-3001}:${IDENTITY_PORT:-3001}'
+    volumes:
+      # RS256 keypair is gitignored/per-environment (generate on the host via
+      # `npm run identity:keys:generate` before first `docker compose up`) —
+      # bind-mounted read-only rather than baked into the image, and at the
+      # same repo-root-relative path the app resolves via process.cwd().
+      - ./apps/services/identity/keys:/workspace/apps/services/identity/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: apps/services/catalog/Dockerfile
+    container_name: ecomiq-catalog-service
+    restart: unless-stopped
+    environment:
+      # Same NODE_ENV caveat as identity-service above — no migrations yet.
+      NODE_ENV: development
+      CATALOG_PORT: ${CATALOG_PORT:-3002}
+      CATALOG_DB_HOST: postgres
+      CATALOG_DB_PORT: 5432
+      CATALOG_DB_USER: ${POSTGRES_USER:-ecomiq}
+      CATALOG_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME:-catalog_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      CATALOG_PULSAR_NAMESPACE: ${CATALOG_PULSAR_NAMESPACE:-catalog}
+      # CatalogSyncController's cross-namespace subscription to crm-service's
+      # review.events topic, which lives in *crm's* namespace, not catalog's
+      # own.
+      CRM_PULSAR_NAMESPACE: ${CRM_PULSAR_NAMESPACE:-crm}
+    ports:
+      - '${CATALOG_PORT:-3002}:${CATALOG_PORT:-3002}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      crm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3002/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: apps/services/inventory/Dockerfile
+    container_name: ecomiq-inventory-service
+    restart: unless-stopped
+    environment:
+      # Same NODE_ENV caveat as identity/catalog above — no migrations yet.
+      NODE_ENV: development
+      INVENTORY_PORT: ${INVENTORY_PORT:-3003}
+      INVENTORY_DB_HOST: postgres
+      INVENTORY_DB_PORT: 5432
+      INVENTORY_DB_USER: ${POSTGRES_USER:-ecomiq}
+      INVENTORY_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      INVENTORY_DB_NAME: ${INVENTORY_DB_NAME:-inventory_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      # Own namespace, for the outbox/producer side (inventory.* events) —
+      # see app.module.ts's PulsarModule wiring.
+      INVENTORY_PULSAR_NAMESPACE: ${INVENTORY_PULSAR_NAMESPACE:-inventory}
+      # Also needs catalog's own namespace: main.ts's *first* PulsarServer
+      # subscribes to catalog-service's product.events topic, which
+      # lives in *catalog's* namespace, not this container's own — must match
+      # whatever catalog-service itself is publishing under.
+      CATALOG_PULSAR_NAMESPACE: ${CATALOG_PULSAR_NAMESPACE:-catalog}
+      # gRPC ReservationService listener, separate from
+      # INVENTORY_PORT's HTTP listener. order-service (once built) reaches
+      # this at inventory-service:50051 on the compose network.
+      INVENTORY_GRPC_PORT: ${INVENTORY_GRPC_PORT:-50051}
+      # order-service's own namespace,
+      # for this container's order-events consumer (OrderSyncModule) —
+      # same "need the *producer's* namespace, not this container's own"
+      # reasoning as CATALOG_PULSAR_NAMESPACE above.
+      ORDER_PULSAR_NAMESPACE: ${ORDER_PULSAR_NAMESPACE:-orders}
+      # purchasing-service's own namespace, for this container's
+      # purchasing.po.received consumer (PurchasingSyncModule) — same
+      # "need the *producer's* namespace" reasoning as
+      # CATALOG_PULSAR_NAMESPACE/ORDER_PULSAR_NAMESPACE above.
+      PURCHASING_PULSAR_NAMESPACE: ${PURCHASING_PULSAR_NAMESPACE:-purchasing}
+    ports:
+      - '${INVENTORY_PORT:-3003}:${INVENTORY_PORT:-3003}'
+      - '${INVENTORY_GRPC_PORT:-50051}:${INVENTORY_GRPC_PORT:-50051}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      purchasing-service:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3003/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  order-service:
+    build:
+      context: .
+      dockerfile: apps/services/order/Dockerfile
+    container_name: ecomiq-order-service
+    restart: unless-stopped
+    environment:
+      # Same NODE_ENV caveat as identity/catalog/inventory above — no migrations yet.
+      NODE_ENV: development
+      ORDER_PORT: ${ORDER_PORT:-3004}
+      ORDER_DB_HOST: postgres
+      ORDER_DB_PORT: 5432
+      ORDER_DB_USER: ${POSTGRES_USER:-ecomiq}
+      ORDER_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      ORDER_DB_NAME: ${ORDER_DB_NAME:-order_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      ORDER_PULSAR_NAMESPACE: ${ORDER_PULSAR_NAMESPACE:-orders}
+      # The checkout saga's InternalTokenClient + gRPC clients,
+      # service-network addresses (not the host-mapped localhost ones in
+      # .env). ORDER_SERVICE_CLIENT_SECRET must match whatever
+      # `identity:service-accounts:seed` pinned the account to — never a
+      # hard-coded default here, unset would silently auth-fail every call.
+      IDENTITY_TOKEN_URL: http://identity-service:3001/api/auth/token
+      ORDER_SERVICE_CLIENT_ID: order-service
+      ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET:?ORDER_SERVICE_CLIENT_SECRET must be set — run identity:service-accounts:seed and copy its output}
+      INVENTORY_GRPC_URL: inventory-service:${INVENTORY_GRPC_PORT:-50051}
+      PAYMENT_GRPC_URL: payment-service:${PAYMENT_GRPC_PORT:-50053}
+      MARKETING_GRPC_URL: marketing-service:${MARKETING_GRPC_PORT:-50052}
+      # order-service's own consumer of payment-service's
+      # `payments` namespace (payment-result events) + the checkout
+      # payment-timeout tunable.
+      PAYMENT_PULSAR_NAMESPACE: ${PAYMENT_PULSAR_NAMESPACE:-payments}
+      CHECKOUT_PAYMENT_TIMEOUT_MINUTES: ${CHECKOUT_PAYMENT_TIMEOUT_MINUTES:-30}
+      # order-service's own consumer of inventory-service's
+      # `inventory` namespace (reservation-expired back-pressure).
+      INVENTORY_PULSAR_NAMESPACE: ${INVENTORY_PULSAR_NAMESPACE:-inventory}
+      # order-service's own consumer of shipping-service's `shipping`
+      # namespace (fulfillment/shipment-status rollup onto the order).
+      SHIPPING_PULSAR_NAMESPACE: ${SHIPPING_PULSAR_NAMESPACE:-shipping}
+    ports:
+      - '${ORDER_PORT:-3004}:${ORDER_PORT:-3004}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3004/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: apps/services/payment/Dockerfile
+    container_name: ecomiq-payment-service
+    restart: unless-stopped
+    environment:
+      # Same NODE_ENV caveat as identity/catalog/inventory above — no migrations yet.
+      NODE_ENV: development
+      PAYMENT_PORT: ${PAYMENT_PORT:-3005}
+      PAYMENT_DB_HOST: postgres
+      PAYMENT_DB_PORT: 5432
+      PAYMENT_DB_USER: ${POSTGRES_USER:-ecomiq}
+      PAYMENT_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      PAYMENT_PULSAR_NAMESPACE: ${PAYMENT_PULSAR_NAMESPACE:-payments}
+    ports:
+      # gRPC port (50053) published alongside HTTP now so the
+      # compose entry doesn't need revisiting later — harmless before the
+      # gRPC listener exists (nothing is bound to it yet).
+      - '${PAYMENT_PORT:-3005}:${PAYMENT_PORT:-3005}'
+      - '${PAYMENT_GRPC_PORT:-50053}:${PAYMENT_GRPC_PORT:-50053}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3005/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  marketing-service:
+    build:
+      context: .
+      dockerfile: apps/services/marketing/Dockerfile
+    container_name: ecomiq-marketing-service
+    restart: unless-stopped
+    environment:
+      # Same NODE_ENV caveat as identity/catalog/inventory above — no migrations yet.
+      NODE_ENV: development
+      MARKETING_PORT: ${MARKETING_PORT:-3006}
+      MARKETING_DB_HOST: postgres
+      MARKETING_DB_PORT: 5432
+      MARKETING_DB_USER: ${POSTGRES_USER:-ecomiq}
+      MARKETING_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      MARKETING_DB_NAME: ${MARKETING_DB_NAME:-marketing_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      MARKETING_PULSAR_NAMESPACE: ${MARKETING_PULSAR_NAMESPACE:-marketing}
+      # SegmentSyncController's cross-namespace subscription to
+      # crm-service's segment.events topic, which lives in *crm's*
+      # namespace, not marketing's own.
+      CRM_PULSAR_NAMESPACE: ${CRM_PULSAR_NAMESPACE:-crm}
+    ports:
+      # gRPC port (50052) published alongside HTTP now so the
+      # compose entry doesn't need revisiting later — harmless before the
+      # gRPC listener exists (nothing is bound to it yet).
+      - '${MARKETING_PORT:-3006}:${MARKETING_PORT:-3006}'
+      - '${MARKETING_GRPC_PORT:-50052}:${MARKETING_GRPC_PORT:-50052}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      crm-service:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3006/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # notification-service's data-source.ts hard-codes `synchronize: false`
+  # unconditionally (unlike every other service's `!isProduction`) — it's on
+  # the migration convention from day one, in dev too. That means, unlike
+  # identity/catalog/inventory/order/payment/marketing (whose *-migrate
+  # one-off services only exist in docker-compose.prod.yml, gated on
+  # NODE_ENV=production forcing synchronize off there), notification needs
+  # its own migrate step here in the base dev file as well — without it the
+  # container boots, connects to Postgres fine, then the outbox relay's
+  # first poll fails with "relation \"outbox\" does not exist" because
+  # nothing ever created the schema.
+  notification-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/notification/Dockerfile
+      # Same reasoning as prod's *-migrate services: the `build` stage still
+      # has devDependencies (ts-node, the typeorm CLI) and raw TS source,
+      # both stripped from the pruned `runtime` stage this Dockerfile
+      # otherwise defaults to.
+      target: build
+    container_name: ecomiq-notification-migrate
+    environment:
+      NODE_ENV: development
+      NOTIFICATION_DB_HOST: postgres
+      NOTIFICATION_DB_PORT: 5432
+      NOTIFICATION_DB_USER: ${POSTGRES_USER:-ecomiq}
+      NOTIFICATION_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-notification_db}
+    command: ['npm', 'run', 'notification:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/services/notification/Dockerfile
+    container_name: ecomiq-notification-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      NOTIFICATION_PORT: ${NOTIFICATION_PORT:-3007}
+      NOTIFICATION_DB_HOST: postgres
+      NOTIFICATION_DB_PORT: 5432
+      NOTIFICATION_DB_USER: ${POSTGRES_USER:-ecomiq}
+      NOTIFICATION_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME:-notification_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      NOTIFICATION_PULSAR_NAMESPACE: ${NOTIFICATION_PULSAR_NAMESPACE:-notify}
+      MARKETING_PULSAR_NAMESPACE: ${MARKETING_PULSAR_NAMESPACE:-marketing}
+      # WebhookDispatchService's InternalTokenClient (Step 8's engagement
+      # forward) — container-network addresses, same pattern as
+      # order-service's checkout saga.
+      IDENTITY_TOKEN_URL: http://identity-service:3001/api/auth/token
+      NOTIFICATION_SERVICE_CLIENT_ID: notification-service
+      NOTIFICATION_SERVICE_CLIENT_SECRET: ${NOTIFICATION_SERVICE_CLIENT_SECRET:?NOTIFICATION_SERVICE_CLIENT_SECRET must be set — run identity:service-accounts:seed and copy its output}
+      MARKETING_SERVICE_URL: http://marketing-service:3006/api
+      # StockLowController's cross-namespace subscription to inventory's
+      # stock_level.events (Step 9).
+      INVENTORY_PULSAR_NAMESPACE: ${INVENTORY_PULSAR_NAMESPACE:-inventory}
+      NOTIFICATION_STAFF_EMAIL: ${NOTIFICATION_STAFF_EMAIL:-staff@ecomiq.dev}
+      NOTIFICATION_STAFF_PHONE: ${NOTIFICATION_STAFF_PHONE:-+10000000000}
+      # ReturnEventsController's cross-namespace subscription to order's
+      # return.events (Step 10).
+      ORDER_PULSAR_NAMESPACE: ${ORDER_PULSAR_NAMESPACE:-orders}
+      # ShippingEventsController's cross-namespace subscription to
+      # shipping-service's shipment.events.
+      SHIPPING_PULSAR_NAMESPACE: ${SHIPPING_PULSAR_NAMESPACE:-shipping}
+    ports:
+      - '${NOTIFICATION_PORT:-3007}:${NOTIFICATION_PORT:-3007}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      notification-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3007/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # shipping-service's data-source.ts hard-codes `synchronize: false`
+  # unconditionally (notification-service's precedent, not every other
+  # service's `!isProduction`) — it needs its own migrate step here in the
+  # base dev file too, same reasoning as `notification-migrate` above.
+  shipping-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/shipping/Dockerfile
+      # Same reasoning as prod's *-migrate services: the `build` stage still
+      # has devDependencies (ts-node, the typeorm CLI) and raw TS source,
+      # both stripped from the pruned `runtime` stage this Dockerfile
+      # otherwise defaults to.
+      target: build
+    container_name: ecomiq-shipping-migrate
+    environment:
+      NODE_ENV: development
+      SHIPPING_DB_HOST: postgres
+      SHIPPING_DB_PORT: 5432
+      SHIPPING_DB_USER: ${POSTGRES_USER:-ecomiq}
+      SHIPPING_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      SHIPPING_DB_NAME: ${SHIPPING_DB_NAME:-shipping_db}
+    command: ['npm', 'run', 'shipping:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  shipping-service:
+    build:
+      context: .
+      dockerfile: apps/services/shipping/Dockerfile
+    container_name: ecomiq-shipping-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      SHIPPING_PORT: ${SHIPPING_PORT:-3008}
+      SHIPPING_DB_HOST: postgres
+      SHIPPING_DB_PORT: 5432
+      SHIPPING_DB_USER: ${POSTGRES_USER:-ecomiq}
+      SHIPPING_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      SHIPPING_DB_NAME: ${SHIPPING_DB_NAME:-shipping_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      SHIPPING_PULSAR_NAMESPACE: ${SHIPPING_PULSAR_NAMESPACE:-shipping}
+      # OrderEventsController's cross-namespace subscription to order's
+      # order.events (auto-draft shipment on orders.order.placed).
+      ORDER_PULSAR_NAMESPACE: ${ORDER_PULSAR_NAMESPACE:-orders}
+      # TrackingService's 60s public-response cache — same shared Redis
+      # instance/env vars as identity-service's RedisModule.
+      REDIS_HOST: redis
+      REDIS_PORT_APP: 6379
+    ports:
+      - '${SHIPPING_PORT:-3008}:${SHIPPING_PORT:-3008}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      shipping-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3008/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # crm-service's data-source.ts hard-codes `synchronize: false`
+  # unconditionally, same precedent as notification/shipping — it needs its
+  # own migrate step here in the base dev file too.
+  crm-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/crm/Dockerfile
+      # Same reasoning as prod's *-migrate services: the `build` stage still
+      # has devDependencies (ts-node, the typeorm CLI) and raw TS source,
+      # both stripped from the pruned `runtime` stage this Dockerfile
+      # otherwise defaults to.
+      target: build
+    container_name: ecomiq-crm-migrate
+    environment:
+      NODE_ENV: development
+      CRM_DB_HOST: postgres
+      CRM_DB_PORT: 5432
+      CRM_DB_USER: ${POSTGRES_USER:-ecomiq}
+      CRM_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      CRM_DB_NAME: ${CRM_DB_NAME:-crm_db}
+    command: ['npm', 'run', 'crm:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  crm-service:
+    build:
+      context: .
+      dockerfile: apps/services/crm/Dockerfile
+    container_name: ecomiq-crm-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      CRM_PORT: ${CRM_PORT:-3009}
+      CRM_DB_HOST: postgres
+      CRM_DB_PORT: 5432
+      CRM_DB_USER: ${POSTGRES_USER:-ecomiq}
+      CRM_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      CRM_DB_NAME: ${CRM_DB_NAME:-crm_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      CRM_PULSAR_NAMESPACE: ${CRM_PULSAR_NAMESPACE:-crm}
+      # OrderEventsController's cross-namespace subscription to order's
+      # order.events (rollup on orders.order.placed).
+      ORDER_PULSAR_NAMESPACE: ${ORDER_PULSAR_NAMESPACE:-orders}
+      # Customer-auth refresh-token rotation/reuse-detection (crm:rt:/
+      # crm:rtfam: keys) — same shared Redis instance as identity-service.
+      REDIS_HOST: redis
+      REDIS_PORT_APP: 6379
+      # crm's own RS256 keypair for the *customer* JWT principal — separate
+      # from JWKS_URI/JWT_ISSUER above, which are identity's staff keypair.
+      CRM_JWT_PRIVATE_KEY_PATH: ${CRM_JWT_PRIVATE_KEY_PATH:-apps/services/crm/keys/private.pem}
+      CRM_JWT_PUBLIC_KEY_PATH: ${CRM_JWT_PUBLIC_KEY_PATH:-apps/services/crm/keys/public.pem}
+      CRM_JWT_KID: ${CRM_JWT_KID:-crm-customer-key-1}
+      CRM_JWT_ACCESS_TTL: ${CRM_JWT_ACCESS_TTL:-15m}
+      CRM_JWT_ISSUER: ${CRM_JWT_ISSUER:-ecomiq-crm-customer}
+      # Self-referential — crm-service verifies its own customer tokens
+      # against its own JWKS, reachable via its own in-container port.
+      CRM_JWKS_URI: ${CRM_JWKS_URI:-http://localhost:3009/api/auth/jwks}
+      CRM_REFRESH_TOKEN_COOKIE_NAME: ${CRM_REFRESH_TOKEN_COOKIE_NAME:-ecomiq_customer_rt}
+      CRM_REFRESH_TOKEN_TTL_DAYS: ${CRM_REFRESH_TOKEN_TTL_DAYS:-30}
+      CRM_LOYALTY_EARN_RATE: ${CRM_LOYALTY_EARN_RATE:-1}
+      CRM_LOYALTY_TIER_SILVER: ${CRM_LOYALTY_TIER_SILVER:-500}
+      CRM_LOYALTY_TIER_GOLD: ${CRM_LOYALTY_TIER_GOLD:-2000}
+      CRM_REFERRAL_REWARD_POINTS: ${CRM_REFERRAL_REWARD_POINTS:-500}
+    ports:
+      - '${CRM_PORT:-3009}:${CRM_PORT:-3009}'
+    volumes:
+      # RS256 keypair is gitignored/per-environment (generate on the host via
+      # `npm run crm:keys:generate` before first `docker compose up`) —
+      # bind-mounted read-only, same pattern as identity-service's own keypair.
+      - ./apps/services/crm/keys:/workspace/apps/services/crm/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      crm-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3009/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # purchasing-service's data-source.ts hard-codes `synchronize: false`
+  # unconditionally, same precedent as notification/shipping/crm — it needs
+  # its own migrate step here in the base dev file too.
+  purchasing-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/purchasing/Dockerfile
+      # Same reasoning as prod's *-migrate services: the `build` stage still
+      # has devDependencies (ts-node, the typeorm CLI) and raw TS source,
+      # both stripped from the pruned `runtime` stage this Dockerfile
+      # otherwise defaults to.
+      target: build
+    container_name: ecomiq-purchasing-migrate
+    environment:
+      NODE_ENV: development
+      PURCHASING_DB_HOST: postgres
+      PURCHASING_DB_PORT: 5432
+      PURCHASING_DB_USER: ${POSTGRES_USER:-ecomiq}
+      PURCHASING_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      PURCHASING_DB_NAME: ${PURCHASING_DB_NAME:-purchasing_db}
+    command: ['npm', 'run', 'purchasing:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  purchasing-service:
+    build:
+      context: .
+      dockerfile: apps/services/purchasing/Dockerfile
+    container_name: ecomiq-purchasing-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PURCHASING_PORT: ${PURCHASING_PORT:-3010}
+      PURCHASING_DB_HOST: postgres
+      PURCHASING_DB_PORT: 5432
+      PURCHASING_DB_USER: ${POSTGRES_USER:-ecomiq}
+      PURCHASING_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      PURCHASING_DB_NAME: ${PURCHASING_DB_NAME:-purchasing_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      PURCHASING_PULSAR_NAMESPACE: ${PURCHASING_PULSAR_NAMESPACE:-purchasing}
+      # Supplier-portal refresh-token rotation/reuse-detection
+      # (purchasing:rt:/purchasing:rtfam: keys) — same shared Redis instance
+      # as identity/crm.
+      REDIS_HOST: redis
+      REDIS_PORT_APP: 6379
+      # purchasing's own RS256 keypair for the *supplier* JWT principal —
+      # separate from JWKS_URI/JWT_ISSUER above, which are identity's staff
+      # keypair.
+      PURCHASING_JWT_PRIVATE_KEY_PATH: ${PURCHASING_JWT_PRIVATE_KEY_PATH:-apps/services/purchasing/keys/private.pem}
+      PURCHASING_JWT_PUBLIC_KEY_PATH: ${PURCHASING_JWT_PUBLIC_KEY_PATH:-apps/services/purchasing/keys/public.pem}
+      PURCHASING_JWT_KID: ${PURCHASING_JWT_KID:-purchasing-supplier-key-1}
+      PURCHASING_JWT_ACCESS_TTL: ${PURCHASING_JWT_ACCESS_TTL:-15m}
+      PURCHASING_JWT_ISSUER: ${PURCHASING_JWT_ISSUER:-ecomiq-purchasing-supplier}
+      # Self-referential — purchasing-service verifies its own supplier
+      # tokens against its own JWKS, reachable via its own in-container port.
+      PURCHASING_JWKS_URI: ${PURCHASING_JWKS_URI:-http://localhost:3010/api/auth/jwks}
+      PURCHASING_REFRESH_TOKEN_COOKIE_NAME: ${PURCHASING_REFRESH_TOKEN_COOKIE_NAME:-ecomiq_supplier_rt}
+      PURCHASING_REFRESH_TOKEN_TTL_DAYS: ${PURCHASING_REFRESH_TOKEN_TTL_DAYS:-30}
+    ports:
+      - '${PURCHASING_PORT:-3010}:${PURCHASING_PORT:-3010}'
+    volumes:
+      # RS256 keypair is gitignored/per-environment (generate on the host via
+      # `npm run purchasing:keys:generate` before first `docker compose up`) —
+      # bind-mounted read-only, same pattern as identity/crm's own keypairs.
+      - ./apps/services/purchasing/keys:/workspace/apps/services/purchasing/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      purchasing-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3010/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  media-migrate:
+    build:
+      context: .
+      dockerfile: apps/services/media/Dockerfile
+      # Same reasoning as every other *-migrate service: the `build` stage
+      # still has devDependencies (ts-node, the typeorm CLI) and raw TS
+      # source, both stripped from the pruned `runtime` stage this
+      # Dockerfile otherwise defaults to.
+      target: build
+    container_name: ecomiq-media-migrate
+    environment:
+      NODE_ENV: development
+      MEDIA_DB_HOST: postgres
+      MEDIA_DB_PORT: 5432
+      MEDIA_DB_USER: ${POSTGRES_USER:-ecomiq}
+      MEDIA_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      MEDIA_DB_NAME: ${MEDIA_DB_NAME:-media_db}
+    command: ['npm', 'run', 'media:migration:run']
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  media-service:
+    build:
+      context: .
+      dockerfile: apps/services/media/Dockerfile
+    container_name: ecomiq-media-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      MEDIA_PORT: ${MEDIA_PORT:-3011}
+      MEDIA_DB_HOST: postgres
+      MEDIA_DB_PORT: 5432
+      MEDIA_DB_USER: ${POSTGRES_USER:-ecomiq}
+      MEDIA_DB_PASSWORD: ${POSTGRES_PASSWORD:-ecomiq}
+      MEDIA_DB_NAME: ${MEDIA_DB_NAME:-media_db}
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      PULSAR_SERVICE_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
+      PULSAR_TENANT: ${PULSAR_TENANT:-ecomiq}
+      MEDIA_PULSAR_NAMESPACE: ${MEDIA_PULSAR_NAMESPACE:-media}
+      MEDIA_S3_BUCKET: ${MEDIA_S3_BUCKET:-ecomiq-media}
+      # Internal ops client — reaches MinIO over the compose network.
+      MEDIA_S3_ENDPOINT: http://minio:9000
+      # Public/presign client — same gotcha as everywhere else in this
+      # plan: a URL signed against `minio:9000` is meaningless to a browser,
+      # which can't resolve that hostname. Defaults to the host-mapped port
+      # so presigned URLs work from the admin/storefront dev origins.
+      MEDIA_S3_PUBLIC_ENDPOINT: ${MEDIA_S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      MEDIA_S3_REGION: ${MEDIA_S3_REGION:-us-east-1}
+      MEDIA_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-ecomiq}
+      MEDIA_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-ecomiq123}
+      MEDIA_MAX_SIZE_BYTES: ${MEDIA_MAX_SIZE_BYTES:-209715200}
+      MEDIA_ALLOWED_MIME_PREFIXES: ${MEDIA_ALLOWED_MIME_PREFIXES:-image/,video/,application/pdf}
+      MEDIA_MAX_TRANSFORM_DIMENSION: ${MEDIA_MAX_TRANSFORM_DIMENSION:-2000}
+    ports:
+      - '${MEDIA_PORT:-3011}:${MEDIA_PORT:-3011}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      identity-service:
+        condition: service_healthy
+      media-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3011/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/api-gateway/Dockerfile
+    container_name: ecomiq-api-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      GATEWAY_PORT: ${GATEWAY_PORT:-3000}
+      IDENTITY_SERVICE_URL: http://identity-service:3001/api
+      CATALOG_SERVICE_URL: http://catalog-service:3002/api
+      INVENTORY_SERVICE_URL: http://inventory-service:3003/api
+      ORDER_SERVICE_URL: http://order-service:3004/api
+      PAYMENT_SERVICE_URL: http://payment-service:3005/api
+      MARKETING_SERVICE_URL: http://marketing-service:3006/api
+      NOTIFICATION_SERVICE_URL: http://notification-service:3007/api
+      SHIPPING_SERVICE_URL: http://shipping-service:3008/api
+      CRM_SERVICE_URL: http://crm-service:3009/api
+      PURCHASING_SERVICE_URL: http://purchasing-service:3010/api
+      MEDIA_SERVICE_URL: http://media-service:3011/api
+      JWKS_URI: http://identity-service:3001/api/.well-known/jwks.json
+      JWT_ISSUER: ${JWT_ISSUER:-ecomiq-identity}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
+      # Service-network address, not the
+      # host-mapped REDIS_PORT other services' .env entries use.
+      # docker-compose.prod.yml overrides this same key once Redis requires
+      # auth — compose merges same-named `environment` keys
+      # across files, so no parametrization is needed here.
+      REDIS_URL: redis://redis:6379
+      PROXY_BODY_LIMIT: ${PROXY_BODY_LIMIT:-25mb}
+      PROXY_UPSTREAM_TIMEOUT_MS: ${PROXY_UPSTREAM_TIMEOUT_MS:-10000}
+    ports:
+      - '${GATEWAY_PORT:-3000}:${GATEWAY_PORT:-3000}'
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      marketing-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      shipping-service:
+        condition: service_healthy
+      crm-service:
+        condition: service_healthy
+      purchasing-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  storefront:
+    build:
+      context: .
+      dockerfile: apps/frontend/storefront/Dockerfile
+    container_name: ecomiq-storefront
+    restart: unless-stopped
+    ports:
+      - '4300:4300'
+    environment:
+      # Internal URL so server components can fetch directly without leaving the docker network
+      GATEWAY_INTERNAL_URL: http://api-gateway:3000/api
+      # Required for Next.js to bind to all interfaces in container
+      HOSTNAME: 0.0.0.0
+      PORT: 4300
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+volumes:
+  ecomiq_postgres_data:
+  ecomiq_redis_data:
+  ecomiq_pulsar_data:
+  ecomiq_minio_data:

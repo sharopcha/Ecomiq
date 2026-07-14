@@ -1,0 +1,193 @@
+<p-dialog 
+  [visible]="visible" 
+  (visibleChange)="hide()" 
+  [modal]="true" 
+  [header]="step() === 1 ? 'Label Details' : (step() === 2 ? 'Packaging' : 'Review & Buy')"
+  [style]="{ width: '600px' }" 
+  [draggable]="false"
+  [resizable]="false"
+  styleClass="p-0"
+>
+  <!-- STEP 1: Details -->
+  <div *ngIf="step() === 1" class="flex flex-col gap-5 p-2">
+    <div class="grid grid-cols-2 gap-4">
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-bold text-slate-700">Carrier</label>
+        <p-select 
+          [options]="carrierOptions" 
+          [ngModel]="carrier()" 
+          (ngModelChange)="carrier.set($event)"
+          optionLabel="label" 
+          optionValue="value" 
+          styleClass="w-full h-10 border-slate-300 rounded-lg text-sm flex items-center"
+          appendTo="body">
+        </p-select>
+      </div>
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-bold text-slate-700">Service Type</label>
+        <p-select 
+          [options]="serviceOptions" 
+          [ngModel]="serviceType()" 
+          (ngModelChange)="serviceType.set($event)"
+          optionLabel="label" 
+          optionValue="value" 
+          styleClass="w-full h-10 border-slate-300 rounded-lg text-sm flex items-center"
+          appendTo="body">
+        </p-select>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2 w-1/2 pr-2">
+      <label class="text-sm font-bold text-slate-700">Ship Date</label>
+      <p-datepicker 
+        [ngModel]="shipDate()" 
+        (ngModelChange)="shipDate.set($event)"
+        dateFormat="yy-mm-dd" 
+        styleClass="w-full h-10 border-slate-300 rounded-lg"
+        appendTo="body">
+      </p-datepicker>
+    </div>
+
+    <div class="flex items-center gap-2 mt-2">
+      <p-checkbox [ngModel]="notifyCustomer()" (ngModelChange)="notifyCustomer.set($event)" [binary]="true" inputId="notifyCustomer"></p-checkbox>
+      <label for="notifyCustomer" class="text-sm font-medium text-slate-700 cursor-pointer">Notify customer when label is purchased</label>
+    </div>
+  </div>
+
+  <!-- STEP 2: Packages -->
+  <div *ngIf="step() === 2" class="flex flex-col gap-4 p-2 max-h-[60vh] overflow-y-auto">
+    
+    <div *ngFor="let pkg of packages(); let i = index" class="bg-slate-50 border border-slate-200 rounded-lg p-4 relative">
+      <button *ngIf="packages().length > 1" (click)="removePackage(i)" class="absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+        <i class="pi pi-trash text-sm"></i>
+      </button>
+
+      <h3 class="text-sm font-bold text-slate-800 mb-4">Package {{ i + 1 }}</h3>
+      
+      <div class="flex flex-col gap-3 mb-4">
+        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Package Type</label>
+        <div class="flex gap-4">
+          <div class="flex items-center gap-2">
+            <input type="radio" [name]="'type' + i" [id]="'custom' + i" value="custom" [(ngModel)]="pkg.type" class="text-[#F16D22] focus:ring-[#F16D22]">
+            <label [for]="'custom' + i" class="text-sm font-medium text-slate-700">Custom Size</label>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="radio" [name]="'type' + i" [id]="'preset' + i" value="preset" [(ngModel)]="pkg.type" class="text-[#F16D22] focus:ring-[#F16D22]">
+            <label [for]="'preset' + i" class="text-sm font-medium text-slate-700">Use Preset</label>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="pkg.type === 'preset'" class="flex flex-col gap-2 mb-4">
+        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Preset</label>
+        <p-select 
+          [options]="presets()" 
+          [(ngModel)]="pkg.presetId" 
+          (ngModelChange)="onPresetChange(pkg)"
+          optionLabel="name" 
+          optionValue="id" 
+          placeholder="Select a preset package"
+          styleClass="w-full h-10 border-slate-300 rounded-lg text-sm flex items-center"
+          appendTo="body">
+        </p-select>
+      </div>
+
+      <div class="grid grid-cols-4 gap-4 mb-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">L (cm)</label>
+          <p-inputnumber [(ngModel)]="pkg.length" [min]="0" styleClass="w-full h-9 border-slate-300 rounded text-sm"></p-inputnumber>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">W (cm)</label>
+          <p-inputnumber [(ngModel)]="pkg.width" [min]="0" styleClass="w-full h-9 border-slate-300 rounded text-sm"></p-inputnumber>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-500">H (cm)</label>
+          <p-inputnumber [(ngModel)]="pkg.height" [min]="0" styleClass="w-full h-9 border-slate-300 rounded text-sm"></p-inputnumber>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-bold text-slate-700">Weight (kg)</label>
+          <p-inputnumber [(ngModel)]="pkg.weight" [min]="0" mode="decimal" [minFractionDigits]="1" [maxFractionDigits]="3" styleClass="w-full h-9 border-slate-300 rounded text-sm font-bold text-blue-700"></p-inputnumber>
+        </div>
+      </div>
+    </div>
+
+    <button (click)="addPackage()" class="text-[#F16D22] text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#fff2ec] py-3 rounded-lg border border-dashed border-[#F16D22] transition-colors w-full mt-2">
+      <i class="pi pi-plus-circle"></i> Add Another Package
+    </button>
+  </div>
+
+  <!-- STEP 3: Review -->
+  <div *ngIf="step() === 3" class="flex flex-col gap-5 p-2">
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col gap-2">
+      <div class="flex justify-between items-center text-sm">
+        <span class="text-blue-800 font-medium">Carrier & Service</span>
+        <span class="font-bold text-blue-900">{{ carrier() }} - {{ serviceType() }}</span>
+      </div>
+      <div class="flex justify-between items-center text-sm">
+        <span class="text-blue-800 font-medium">Total Packages</span>
+        <span class="font-bold text-blue-900">{{ packages().length }}</span>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-3">
+      <h3 class="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2">Estimated Cost</h3>
+      <div class="flex justify-between items-center text-sm text-slate-600">
+        <span>Subtotal</span>
+        <span>$18.50</span>
+      </div>
+      <div class="flex justify-between items-center text-sm text-slate-600">
+        <span>Ecomiq Discount</span>
+        <span class="text-emerald-600 font-medium">-$3.00</span>
+      </div>
+      <div class="flex justify-between items-center text-lg font-bold text-slate-900 pt-2 border-t border-slate-200 mt-1">
+        <span>Total Label Cost</span>
+        <span>$15.50</span>
+      </div>
+    </div>
+    
+    <div class="bg-amber-50 text-amber-800 border border-amber-200 text-xs p-3 rounded-lg mt-4 flex items-start gap-2">
+      <i class="pi pi-exclamation-triangle mt-0.5"></i>
+      <span>By clicking Buy Label, the amount will be deducted from your account balance.</span>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex justify-end gap-2 w-full pt-4 border-t border-slate-100">
+      <button 
+        *ngIf="step() === 1"
+        class="px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="hide()">
+        Cancel
+      </button>
+      <button 
+        *ngIf="step() === 1"
+        class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="next()">
+        Next
+      </button>
+
+      <button 
+        *ngIf="step() > 1"
+        class="px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="back()"
+        [disabled]="submitting()">
+        Back
+      </button>
+      <button 
+        *ngIf="step() === 2"
+        class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="next()">
+        Review
+      </button>
+      <button 
+        *ngIf="step() === 3"
+        class="px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 disabled:bg-emerald-300 text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2"
+        (click)="confirm()"
+        [disabled]="submitting()">
+        <i *ngIf="submitting()" class="pi pi-spin pi-spinner text-xs"></i>
+        Buy Label
+      </button>
+    </div>
+  </ng-template>
+</p-dialog>

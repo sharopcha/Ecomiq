@@ -1,0 +1,220 @@
+<p-dialog
+  [visible]="visible"
+  (visibleChange)="visibleChange.emit($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [dismissableMask]="true"
+  header="Add Product Variants"
+  [style]="{ width: '60rem' }"
+  styleClass="font-sans"
+>
+  <div class="flex flex-col gap-6 py-2 text-slate-700">
+    <!-- Product detail recap -->
+    <section class="flex flex-col gap-3">
+      <h4 class="text-sm font-bold text-slate-900">Product detail</h4>
+      <div>
+        <p class="text-sm font-semibold text-slate-900">{{ product.name }}</p>
+        <p class="text-xs text-slate-500 mt-0.5 line-clamp-2">{{ product.description }}</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white px-5 py-4 grid grid-cols-2 sm:grid-cols-6 gap-4">
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] text-slate-400">Category</span>
+          <span class="text-xs font-semibold text-slate-800">{{ categoryName() }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] text-slate-400">Channel</span>
+          <span class="text-xs font-semibold text-slate-800 inline-flex items-center gap-1">
+            <i class="pi pi-building text-[10px] text-slate-400"></i>{{ channelName() }}
+          </span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] text-slate-400">Vendor</span>
+          <span class="text-xs font-semibold text-slate-800">{{ vendorName() }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] text-slate-400">Type</span>
+          <span class="text-xs font-semibold text-slate-800">{{ typeName() }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] text-slate-400">Created</span>
+          <span class="text-xs font-semibold text-slate-800">{{ product.created_at | date: 'dd MMM yyyy' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] text-slate-400">Last Updated</span>
+          <span class="text-xs font-semibold text-slate-800">{{ product.updated_at | date: 'dd MMM yyyy' }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Variant configuration -->
+    <section class="flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h4 class="text-sm font-bold text-slate-900">Variant</h4>
+        <button
+          type="button"
+          (click)="addOptionDimension()"
+          [disabled]="optionsConfigs().length >= 3"
+          class="text-xs font-semibold text-[#F16D22] hover:text-[#d95a15] disabled:opacity-40 transition-colors inline-flex items-center gap-1"
+        >
+          <i class="pi pi-plus text-[10px]"></i> Add variant
+        </button>
+      </div>
+
+      @for (opt of optionsConfigs(); track $index; let idx = $index) {
+        <div class="rounded-xl border border-slate-200 bg-white p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-semibold text-slate-900">Variant {{ idx + 1 }}</span>
+            @if (optionsConfigs().length > 1) {
+              <button
+                type="button"
+                (click)="removeOptionDimension(idx)"
+                class="text-slate-400 hover:text-red-500 transition-colors"
+                aria-label="Remove variant"
+              >
+                <i class="pi pi-trash text-sm"></i>
+              </button>
+            }
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-4">
+            <!-- Variant type -->
+            <div class="flex flex-col gap-1.5 sm:w-52">
+              <label class="text-xs font-medium text-slate-500">Variant type</label>
+              <p-select
+                [options]="variantTypes"
+                [(ngModel)]="opt.name"
+                (ngModelChange)="onConfigChange()"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select type"
+                styleClass="w-full text-xs"
+              ></p-select>
+            </div>
+
+            <!-- Variant values (chips + comma input) -->
+            <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+              <label class="text-xs font-medium text-slate-500">Variant value</label>
+              <div class="min-h-10 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                @for (val of parseValues(opt.valuesString); track val) {
+                  <span class="inline-flex items-center gap-1.5 rounded-md bg-slate-100 border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700">
+                    {{ val }}
+                    <button type="button" (click)="removeValue(idx, val)" class="text-slate-400 hover:text-red-500" aria-label="Remove value">
+                      <i class="pi pi-times text-[10px]"></i>
+                    </button>
+                  </span>
+                }
+                <input
+                  type="text"
+                  [(ngModel)]="opt.valuesString"
+                  (ngModelChange)="onConfigChange()"
+                  placeholder="Type values separated by commas…"
+                  class="flex-1 min-w-32 border-0 outline-none text-xs text-slate-700 placeholder-slate-400 bg-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Use image toggle -->
+          <div class="flex items-center gap-2.5">
+            <p-toggleswitch [(ngModel)]="opt.useImages"></p-toggleswitch>
+            <span class="text-xs text-slate-600">Use image for this variant</span>
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- Variant table -->
+    @if (generatedVariants().length > 0) {
+      <section class="flex flex-col gap-3">
+        <h4 class="text-sm font-bold text-slate-900">Variant table</h4>
+
+        <p-table [value]="generatedVariants()" styleClass="text-xs" [tableStyle]="{ 'min-width': '100%' }">
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 3rem"></th>
+              <th style="width: 4rem">Image</th>
+              <th>Variant</th>
+              <th style="width: 11rem">Price</th>
+              <th style="width: 7rem">Stock</th>
+              <th style="width: 12rem">SKU</th>
+              <th style="width: 6rem">Status</th>
+              <th style="width: 7rem"></th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-v>
+            <tr>
+              <td>
+                <p-checkbox [(ngModel)]="v.is_active" [binary]="true"></p-checkbox>
+              </td>
+              <td>
+                <div class="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400">
+                  <i class="pi pi-image text-sm"></i>
+                </div>
+              </td>
+              <td class="font-medium text-slate-800">
+                {{ v.option_values && v.option_values.length ? v.option_values[0].valueName : v.sku }}
+              </td>
+              <td>
+                <p-inputgroup>
+                  <p-inputgroup-addon>$</p-inputgroup-addon>
+                  <p-inputnumber
+                    [ngModel]="(v.price_minor || 0) / 100"
+                    (ngModelChange)="v.price_minor = ($event || 0) * 100"
+                    [disabled]="!v.is_active"
+                    mode="decimal"
+                    [minFractionDigits]="0"
+                    [maxFractionDigits]="2"
+                    [min]="0"
+                    inputStyleClass="w-full"
+                    styleClass="flex-1"
+                  ></p-inputnumber>
+                </p-inputgroup>
+              </td>
+              <td>
+                <p-inputnumber
+                  [(ngModel)]="v.stock"
+                  [disabled]="!v.is_active"
+                  [min]="0"
+                  [showButtons]="false"
+                  inputStyleClass="w-full text-center"
+                  styleClass="w-full"
+                ></p-inputnumber>
+              </td>
+              <td>
+                <input type="text" pInputText [(ngModel)]="v.sku" [disabled]="!v.is_active" class="w-full text-xs font-mono" />
+              </td>
+              <td>
+                <p-toggleswitch [(ngModel)]="v.is_active"></p-toggleswitch>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  (click)="makeDefault(v.id)"
+                  [disabled]="!v.is_active"
+                  class="text-xs font-medium text-slate-600 hover:text-[#F16D22] underline disabled:opacity-40 disabled:no-underline transition-colors"
+                >
+                  {{ v.is_default ? 'Default' : 'Make default' }}
+                </button>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </section>
+    }
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex items-center justify-end gap-2 w-full">
+      <p-button label="Cancel" [text]="true" severity="secondary" size="small" (onClick)="close()"></p-button>
+      <p-button
+        label="Save Variant"
+        size="small"
+        [disabled]="generatedVariants().length === 0"
+        (onClick)="save()"
+      ></p-button>
+    </div>
+  </ng-template>
+</p-dialog>

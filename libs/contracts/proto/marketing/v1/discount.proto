@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+// ecomiq.marketing.v1 — same versioned-package convention as
+// ecomiq.inventory.v1/ecomiq.payment.v1. Backs order-service's checkout
+// saga (ADR-7): ValidateDiscount is the first synchronous call in the
+// saga, before ReserveStock/CreatePaymentIntent. Server side lives in
+// marketing-service (discount-grpc.controller.ts), delegating to the
+// validate-discount.util.ts core — no business logic duplicated here.
+package ecomiq.marketing.v1;
+
+service DiscountService {
+  // Read-only — must NOT record usage (usage is recorded on
+  // orders.order.placed; a validate-then-abandon checkout must
+  // not burn the code). See ValidateDiscountResponse's doc comment.
+  rpc ValidateDiscount(ValidateDiscountRequest) returns (ValidateDiscountResponse);
+}
+
+message ValidateDiscountRequest {
+  string store_id = 1;
+  string code = 2;
+  optional string customer_id = 3;
+  int64 subtotal_minor = 4;
+  string currency = 5;
+}
+
+message ValidateDiscountResponse {
+  // Every ValidateDiscount failure is a business-rule outcome the saga
+  // must branch on (unknown code, expired, limit reached, ...) — a typed
+  // oneof, same split as reservation.proto/payment_intent.proto. Auth/
+  // malformed-request failures stay real gRPC status codes.
+  oneof result {
+    DiscountValidated valid = 1;
+    DiscountValidationFailure failure = 2;
+  }
+}
+
+message DiscountValidated {
+  string discount_id = 1;
+  int64 discount_minor = 2;
+  DiscountKind kind = 3;
+}
+
+enum DiscountKind {
+  DISCOUNT_KIND_UNSPECIFIED = 0;
+  PERCENTAGE = 1;
+  FIXED_AMOUNT = 2;
+  FREE_SHIPPING = 3;
+}
+
+message DiscountValidationFailure {
+  DiscountValidationFailureReason reason = 1;
+  string message = 2;
+}
+
+// Mirrors validate-discount.util.ts's ValidateDiscountReason union exactly
+// — this contract and that util's return type must stay in lockstep (the
+// gRPC controller is a thin translation layer, see its own doc comment).
+enum DiscountValidationFailureReason {
+  DISCOUNT_VALIDATION_FAILURE_REASON_UNSPECIFIED = 0;
+  NOT_FOUND = 1;
+  INACTIVE = 2;
+  NOT_STARTED = 3;
+  EXPIRED = 4;
+  USAGE_LIMIT_REACHED = 5;
+  ONCE_PER_CUSTOMER = 6;
+  MIN_SUBTOTAL_NOT_MET = 7;
+}

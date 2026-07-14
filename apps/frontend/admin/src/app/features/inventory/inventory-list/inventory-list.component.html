@@ -1,0 +1,254 @@
+<div class="p-6 max-w-[1600px] mx-auto text-slate-700">
+
+  <!-- 1. PAGE HEADER -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-bold tracking-tight text-slate-900">
+        Inventory
+      </h1>
+      <div class="flex items-center gap-1">
+        <button class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-650 transition-colors cursor-pointer">
+          <i class="pi pi-ellipsis-h text-sm"></i>
+        </button>
+        <button class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-650 transition-colors cursor-pointer">
+          <i class="pi pi-download text-sm"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. FILTER BAR -->
+  <div class="p-4 rounded-xl bg-white border border-slate-200 flex flex-col gap-4 mb-6 shadow-sm">
+    <!-- Bottom row: Search & Dropdowns -->
+    <div class="flex flex-col sm:flex-row items-center gap-3">
+      <!-- Search Input -->
+      <div class="relative w-full sm:w-60">
+        <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-450 text-xs"></i>
+        <input
+          type="text"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="onSearchChange($event)"
+          placeholder="Search by product name or SKU..."
+          class="w-full h-8 pl-8 pr-4 bg-slate-50 text-slate-700 rounded-full text-xs border border-slate-200 focus:outline-none focus:border-[#F16D22]/60 placeholder-slate-400 transition-all"
+        />
+      </div>
+
+      <!-- Filters -->
+      <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <!-- Warehouse Filter -->
+        <p-select
+          [options]="locationOptions()"
+          [ngModel]="selectedLocation()"
+          (ngModelChange)="selectedLocation.set($event); onFilterChange()"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Warehouse"
+          styleClass="orders-pill-select"
+        ></p-select>
+
+        <!-- Category Filter -->
+        <p-select
+          [options]="categoryOptions()"
+          [ngModel]="selectedCategory()"
+          (ngModelChange)="selectedCategory.set($event); onFilterChange()"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Category"
+          styleClass="orders-pill-select"
+        ></p-select>
+
+        <!-- Stock Level Filter -->
+        <p-select
+          [options]="stockLevelOptions"
+          [ngModel]="selectedStockLevel()"
+          (ngModelChange)="selectedStockLevel.set($event); onFilterChange()"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Stock level"
+          styleClass="orders-pill-select"
+        ></p-select>
+        
+        <!-- Hide button -->
+        <button class="h-8 px-4 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-650 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer">
+          <span>Hide</span>
+        </button>
+      </div>
+      
+      <!-- Manage Table -->
+      <div class="sm:ml-auto">
+        <button class="h-8 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer">
+          <i class="pi pi-table text-xs text-slate-450"></i>
+          <span>Manage Table</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. CONTENT -->
+  @if (loading()) {
+    <div class="p-16 border border-slate-200 rounded-2xl text-center bg-white shadow-sm">
+      <i class="pi pi-spin pi-spinner text-slate-400 text-2xl"></i>
+    </div>
+  } @else if (loadError()) {
+    <div class="p-16 border border-dashed border-red-200 rounded-2xl text-center flex flex-col items-center justify-center bg-white shadow-sm">
+      <i class="pi pi-exclamation-triangle text-red-400 text-3xl mb-3"></i>
+      <span class="text-sm font-semibold text-slate-800">{{ loadError() }}</span>
+      <button
+        (click)="fetch()"
+        class="mt-3 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-xs font-bold rounded-lg border border-slate-200 transition-colors"
+      >
+        Retry
+      </button>
+    </div>
+  } @else if (rows().length === 0) {
+    <div class="p-16 border border-dashed border-slate-200 rounded-2xl text-center flex flex-col items-center justify-center bg-white shadow-sm">
+      <i class="pi pi-database text-slate-400 text-3xl mb-3"></i>
+      <span class="text-sm font-semibold text-slate-800">No stock levels found</span>
+      <span class="text-xs text-slate-400 mt-1">Try relaxing your search terms or filters.</span>
+    </div>
+  } @else {
+    <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+      <p-table [value]="rows()" styleClass="p-datatable-sm text-xs">
+        <ng-template pTemplate="header">
+          <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[11px] tracking-wide uppercase">
+            <th class="py-3.5 px-4 text-left">Product name <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-left w-32">SKU <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-left w-32">Category <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-left w-44">Supplier <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-left w-44">Current Stock <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-right w-28">Unit Price <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+            <th class="py-3.5 px-4 text-right w-16"></th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-row>
+          <tr class="border-b border-slate-150 hover:bg-slate-50/60 transition-colors text-slate-700 cursor-pointer">
+            <!-- Product -->
+            <td class="py-3.5 px-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-8 rounded border border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                  <i class="pi pi-image text-slate-300 text-sm"></i>
+                </div>
+                <span class="font-bold text-slate-900 line-clamp-1 hover:text-[#F16D22] transition-colors">{{ row.product_name || 'Unknown product' }}</span>
+              </div>
+            </td>
+            <!-- SKU -->
+            <td class="py-3.5 px-4 font-mono text-slate-500 text-[10px]">{{ row.sku }}</td>
+            <!-- Category -->
+            <td class="py-3.5 px-4">
+              <span class="text-[9px] font-semibold bg-slate-50 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full">
+                {{ row.category_name || 'None' }}
+              </span>
+            </td>
+            <!-- Supplier (mock join — no supplier backend yet, handover §5) -->
+            <td class="py-3.5 px-4 text-slate-600">{{ supplierName(row) }}</td>
+            <!-- Current Stock -->
+            <td class="py-3.5 px-4">
+              <div class="flex flex-col gap-1">
+                <span class="text-[10px] font-semibold text-slate-700">
+                  {{ row.available }} unit
+                  <span class="text-slate-400 font-normal">·</span>
+                  <span
+                    [class.text-emerald-600]="row.status === 'high'"
+                    [class.text-amber-600]="row.status === 'low'"
+                    [class.text-red-600]="row.status === 'out'"
+                  >{{ statusLabel(row.status) }}</span>
+                </span>
+                <div class="w-28 h-1 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                  <div
+                    class="h-full rounded-full transition-all duration-300"
+                    [class.bg-emerald-500]="row.status === 'high'"
+                    [class.bg-amber-500]="row.status === 'low'"
+                    [class.bg-red-500]="row.status === 'out'"
+                    [style.width.%]="row.status === 'high' ? 85 : row.status === 'low' ? 25 : 4"
+                  ></div>
+                </div>
+              </div>
+            </td>
+            <!-- Unit Price -->
+            <td class="py-3.5 px-4 text-right font-semibold text-slate-800">
+              @if (row.price_minor !== null) {
+                {{ row.price_minor / 100 | currency }}
+              } @else {
+                <span class="text-slate-400">—</span>
+              }
+            </td>
+            <!-- Row actions -->
+            <td class="py-3.5 px-4 text-right">
+              <button
+                (click)="setMenuTarget(row, $event, menu)"
+                class="w-7 h-7 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+              >
+                <i class="pi pi-ellipsis-h text-xs"></i>
+              </button>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+
+    <!-- Load more (cursor pagination) -->
+    @if (nextCursor()) {
+      <div class="flex justify-center mt-4">
+        <button
+          (click)="loadMore()"
+          [disabled]="loadingMore()"
+          class="px-4 py-2 bg-white hover:bg-slate-50 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 transition-colors flex items-center gap-2"
+        >
+          @if (loadingMore()) {
+            <i class="pi pi-spin pi-spinner text-xs"></i>
+          }
+          <span>Load more</span>
+        </button>
+      </div>
+    }
+  }
+</div>
+
+<!-- Row context menu -->
+<p-menu #menu [model]="rowMenuItems" [popup]="true" styleClass="text-xs bg-white border border-slate-200 text-slate-700"></p-menu>
+
+<!-- DIALOGS -->
+@if (showAuditDialog() && menuTargetRow()) {
+  <app-audit-stock-dialog
+    [(visible)]="showAuditDialog"
+    [row]="menuTargetRow()!"
+    [locations]="locations()"
+    [preselectedLocationId]="selectedLocation()"
+    (auditSaved)="onActionCompleted()"
+  ></app-audit-stock-dialog>
+}
+
+@if (showAlertDialog() && menuTargetRow()) {
+  <app-create-stock-alert-dialog
+    [(visible)]="showAlertDialog"
+    [row]="menuTargetRow()!"
+    [locations]="locations()"
+    (alertSaved)="onActionCompleted()"
+  ></app-create-stock-alert-dialog>
+}
+
+@if (showReorderDialog() && menuTargetRow()) {
+  <app-set-reorder-dialog
+    [(visible)]="showReorderDialog"
+    [row]="menuTargetRow()!"
+    [locations]="locations()"
+    (ruleSaved)="onActionCompleted()"
+  ></app-set-reorder-dialog>
+}
+
+@if (showReserveDialog() && menuTargetRow()) {
+  <app-reserve-item-dialog
+    [(visible)]="showReserveDialog"
+    [row]="menuTargetRow()!"
+    [locations]="locations()"
+    [preselectedLocationId]="selectedLocation()"
+    (reservationSaved)="onActionCompleted()"
+  ></app-reserve-item-dialog>
+}
+
+@if (showHistoryDialog() && menuTargetRow()) {
+  <app-stock-history-dialog
+    [(visible)]="showHistoryDialog"
+    [row]="menuTargetRow()!"
+  ></app-stock-history-dialog>
+}

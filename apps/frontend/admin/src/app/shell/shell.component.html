@@ -1,0 +1,386 @@
+<div class="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-700 font-sans">
+  
+  <!-- LEFT ICON RAIL (Collapsed Main Sidebar) -->
+  <div class="w-16 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col items-center justify-between py-4 z-20">
+    <div class="flex flex-col items-center w-full gap-4">
+      <!-- Mockup Logo -->
+      <a routerLink="/" class="flex items-center justify-center w-8 h-8">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Stylied infinite/overlapping logo in orange and dark navy -->
+          <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12" stroke="#0D0D1C" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M12 6C8.69 6 6 8.69 6 12C6 15.31 8.69 18 12 18C15.31 18 18 15.31 18 12" stroke="#F16D22" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </a>
+      
+      <!-- Nav Items -->
+      <nav class="flex flex-col items-center w-full gap-2">
+        <!-- 1. Home / Dashboard -->
+        <a routerLink="/" 
+           [routerLinkActiveOptions]="{exact: true}"
+           routerLinkActive="bg-slate-100 text-slate-900 font-semibold" 
+           class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all"
+           pTooltip="Dashboard"
+           tooltipPosition="right">
+          <i class="pi pi-home text-base"></i>
+        </a>
+        
+        <!-- 2. Orders with 32 Badge -->
+        <a routerLink="/orders" 
+           routerLinkActive="bg-slate-100 text-slate-900 font-semibold" 
+           [class.bg-slate-100]="isOrdersWorkspace()"
+           [class.text-slate-900]="isOrdersWorkspace()"
+           class="relative flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all"
+           pTooltip="Orders"
+           tooltipPosition="right">
+          <i class="pi pi-file text-base"></i>
+          <span class="absolute -top-0.5 -right-0.5 bg-[#EE4B2B] text-white text-[8px] font-extrabold w-3.5 h-3.5 rounded-full flex items-center justify-center">32</span>
+        </a>
+
+        <!-- 3. Products Catalog -->
+        <a routerLink="/products" 
+           routerLinkActive="bg-slate-100 text-slate-900 font-semibold" 
+           [class.bg-slate-100]="isProductsWorkspace()"
+           [class.text-slate-900]="isProductsWorkspace()"
+           class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all"
+           pTooltip="Products Catalog"
+           tooltipPosition="right">
+          <i class="pi pi-box text-base"></i>
+        </a>
+
+        <!-- 4. Inventory -->
+        <a routerLink="/inventory"
+           routerLinkActive="bg-slate-100 text-slate-900 font-semibold"
+           [class.bg-slate-100]="isInventoryWorkspace()"
+           [class.text-slate-900]="isInventoryWorkspace()"
+           class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all"
+           pTooltip="Inventory"
+           tooltipPosition="right">
+          <i class="pi pi-database text-base"></i>
+        </a>
+
+        <!-- 5. Storefront -->
+        <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+           pTooltip="Storefront"
+           tooltipPosition="right">
+          <i class="pi pi-shop text-base"></i>
+        </a>
+
+        <!-- 6. Customers -->
+        <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+           pTooltip="Customers"
+           tooltipPosition="right">
+          <i class="pi pi-users text-base"></i>
+        </a>
+
+        <!-- 7. Campaigns -->
+        <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+           pTooltip="Campaigns"
+           tooltipPosition="right">
+          <i class="pi pi-megaphone text-base"></i>
+        </a>
+
+        <!-- 8. Media / Images -->
+        <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+           pTooltip="Media & Images"
+           tooltipPosition="right">
+          <i class="pi pi-image text-base"></i>
+        </a>
+
+        <!-- 9. Reports / Analytics -->
+        <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+           pTooltip="Reports & Analytics"
+           tooltipPosition="right">
+          <i class="pi pi-chart-pie text-base"></i>
+        </a>
+
+        <!-- 10. Support Comments -->
+        <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+           pTooltip="Support & Tickets"
+           tooltipPosition="right">
+          <i class="pi pi-comments text-base"></i>
+        </a>
+      </nav>
+    </div>
+
+    <!-- Bottom Actions -->
+    <div class="flex flex-col items-center w-full gap-2.5">
+      <!-- 1. Settings -->
+      <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+         pTooltip="Settings"
+         tooltipPosition="right">
+        <i class="pi pi-cog text-base"></i>
+      </a>
+      
+      <!-- 2. Grid -->
+      <a class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+         pTooltip="Layouts"
+         tooltipPosition="right">
+        <i class="pi pi-th-large text-base"></i>
+      </a>
+
+      <!-- 3. Collapse Expand -->
+      <button class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-450 hover:bg-slate-50 hover:text-slate-800 transition-all cursor-pointer" 
+              pTooltip="Collapse/Expand Menu"
+              tooltipPosition="right">
+        <i class="pi pi-angle-double-right text-base"></i>
+      </button>
+
+      <!-- 4. Log out -->
+      <button (click)="logout()" 
+              class="flex items-center justify-center w-8 h-8 rounded-lg text-slate-405 hover:bg-red-50 hover:text-red-500 transition-all"
+              pTooltip="Log out"
+              tooltipPosition="right">
+        <i class="pi pi-sign-out text-base"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- WORKSPACE SUB-SIDEBAR -->
+  @if (hasSubSidebar()) {
+    <div class="flex-shrink-0 bg-slate-50 border-r border-slate-200 flex flex-col z-10 transition-all duration-200 ease-in-out overflow-hidden"
+         [class.w-60]="!isSubSidebarCollapsed()"
+         [class.w-0]="isSubSidebarCollapsed()"
+         [class.border-r-0]="isSubSidebarCollapsed()">
+      <div class="w-60 flex flex-col h-full overflow-hidden flex-shrink-0">
+        
+        <!-- Header -->
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <span class="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            Workspace
+          </span>
+          <button 
+            (click)="toggleSubSidebar()" 
+            class="p-1 hover:bg-slate-200/60 rounded text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            title="Collapse Workspace"
+          >
+            <i class="pi pi-bars text-xs"></i>
+          </button>
+        </div>
+
+        <!-- Catalog Sidebar -->
+        @if (isProductsWorkspace()) {
+          <div class="flex-1 py-4 overflow-y-auto px-3 flex flex-col gap-1">
+            <a routerLink="/products" 
+               [routerLinkActiveOptions]="{exact: true}"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold" 
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Products</span>
+            </a>
+            
+            <a routerLink="/bundles" 
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold" 
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Bundles</span>
+            </a>
+
+            <a routerLink="/licenses" 
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold" 
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>License Keys</span>
+            </a>
+
+            <a routerLink="/dropshipping"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold"
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Dropshipping</span>
+            </a>
+
+            <div class="mt-6 mb-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Settings</div>
+
+            <a routerLink="/products/taxonomy"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold"
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Taxonomy</span>
+            </a>
+          </div>
+        }
+
+        <!-- Inventory Sidebar -->
+        @if (isInventoryWorkspace()) {
+          <div class="flex-1 py-4 overflow-y-auto px-3 flex flex-col gap-1">
+            <a routerLink="/inventory"
+               [routerLinkActiveOptions]="{exact: true}"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold"
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Inventory</span>
+            </a>
+
+            <a routerLink="/inventory/suppliers"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold"
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Supplier</span>
+            </a>
+
+            <a routerLink="/inventory/purchasing"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold"
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Purchasing</span>
+            </a>
+
+            <a routerLink="/inventory/warehouses"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-semibold"
+               class="flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-medium">
+              <span>Warehouses</span>
+            </a>
+          </div>
+        }
+
+        <!-- Orders Sidebar -->
+        @if (isOrdersWorkspace()) {
+          <div class="flex-1 py-4 overflow-y-auto px-3 flex flex-col gap-1">
+            <a routerLink="/orders"
+               [routerLinkActiveOptions]="{exact: true}"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-bold shadow-sm"
+               class="flex items-center justify-between px-3.5 py-2 rounded-lg text-slate-650 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-semibold">
+              <span>Orders List</span>
+              <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-200 text-slate-700">New 20</span>
+            </a>
+
+            <a routerLink="/orders/shipments"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-bold shadow-sm"
+               class="flex items-center justify-between px-3.5 py-2 rounded-lg text-slate-650 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-semibold">
+              <span>Shipment</span>
+              <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-200 text-slate-700">8</span>
+            </a>
+
+            <a routerLink="/orders/returns"
+               routerLinkActive="bg-slate-200/80 text-slate-900 font-bold shadow-sm"
+               class="flex items-center justify-between px-3.5 py-2 rounded-lg text-slate-650 hover:bg-slate-200/40 hover:text-slate-950 transition-all text-xs font-semibold">
+              <span>Return</span>
+              <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-200 text-slate-700">4</span>
+            </a>
+
+
+            <div class="mt-6 mb-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Settings</div>
+
+            <a class="flex items-center justify-between px-3.5 py-2 rounded-lg text-slate-500 hover:bg-slate-200/30 transition-all text-xs font-medium cursor-pointer">
+              <span>Custom Tracking Page</span>
+            </a>
+
+            <a class="flex items-center justify-between px-3.5 py-2 rounded-lg text-slate-500 hover:bg-slate-200/30 transition-all text-xs font-medium cursor-pointer">
+              <span>Carrier Integration</span>
+            </a>
+
+            <a class="flex items-center justify-between px-3.5 py-2 rounded-lg text-slate-500 hover:bg-slate-200/30 transition-all text-xs font-medium cursor-pointer">
+              <span>Automation</span>
+            </a>
+          </div>
+        }
+
+        <!-- Need Help Section -->
+        <div class="p-4 border-t border-slate-250 bg-slate-50/50 text-[11px] mt-auto">
+          <div class="text-slate-450 font-medium">Need some help?</div>
+          <a href="#" class="text-blue-500 hover:text-blue-700 font-semibold mt-0.5 inline-block">Drop us a word</a>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- RIGHT VIEWPORT (Top Bar + Main Scroll Viewport) -->
+  <div class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+    
+    <!-- TOP BAR -->
+    <header class="h-16 flex-shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-10">
+      <!-- Left actions & Breadcrumbs -->
+      <div class="flex items-center gap-3">
+        <!-- Expand Sub-Sidebar Button (Only visible if collapsed and we are in a workspace) -->
+        @if (hasSubSidebar() && isSubSidebarCollapsed()) {
+          <button 
+            (click)="toggleSubSidebar()" 
+            class="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all cursor-pointer mr-1"
+            title="Expand Workspace"
+          >
+            <i class="pi pi-bars text-xs"></i>
+          </button>
+        }
+        <!-- Breadcrumbs -->
+        <div class="flex items-center gap-2 text-sm text-slate-500">
+          @for (crumb of breadcrumbs(); track $index) {
+            @if ($index > 0) {
+              <span class="text-xs text-slate-300">/</span>
+            }
+            <span [class.text-[#F16D22]]="$last" [class.font-medium]="$last" [class.text-slate-800]="$first && !$last" class="flex items-center gap-1.5">
+              {{ crumb }}
+              @if ($first && crumb === (auth.store()?.name ?? 'Fikri Store')) {
+                <i class="pi pi-chevron-down text-[9px] text-slate-400"></i>
+              }
+            </span>
+          }
+        </div>
+      </div>
+
+      <!-- Search & Right Profile Actions -->
+      <div class="flex items-center gap-3">
+        <!-- Global Search Input -->
+        <div class="relative w-80 hidden md:block">
+          <i class="pi pi-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-450 text-xs"></i>
+          <input 
+            #searchInput
+            type="text" 
+            placeholder="Search or Press '/' for commands" 
+            class="w-full pl-10 pr-12 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200 focus:outline-none focus:bg-white focus:border-[#F16D22]/60 placeholder-slate-400 transition-all"
+          />
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium bg-slate-200 border border-slate-300 text-slate-500 px-1.5 py-0.5 rounded">/</span>
+        </div>
+
+        <!-- Notification & Chat Icons -->
+        <div class="flex items-center gap-1.5">
+          <button (click)="op.toggle($event)" class="relative w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center hover:bg-slate-200 text-slate-550 hover:text-slate-850 transition-all">
+            <i class="pi pi-bell text-sm"></i>
+            <span *ngIf="unreadCount() > 0" class="absolute top-1 right-1 w-2 h-2 bg-[#F16D22] rounded-full"></span>
+          </button>
+
+          <p-popover #op styleClass="w-80 shadow-lg border border-slate-200 rounded-xl mt-2 p-0">
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <span class="font-bold text-slate-900">Notifications</span>
+              <button class="text-[10px] font-bold text-[#F16D22] hover:underline" (click)="markAllAsRead(op)">Mark all as read</button>
+            </div>
+            <div class="max-h-96 overflow-y-auto">
+              <div *ngIf="notifications().length === 0" class="p-6 text-center text-slate-500 text-sm">
+                You're all caught up!
+              </div>
+              <div *ngFor="let n of notifications()" class="p-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors" [class.bg-slate-50]="!n.read_at" (click)="markAsRead(n)">
+                <div class="flex gap-3">
+                  <div class="mt-1">
+                    <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                      <i class="pi pi-info-circle text-xs"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-xs font-bold text-slate-900">{{ n.title || (n.kind | titlecase) }}</p>
+                    <p class="text-xs text-slate-600 line-clamp-2 mt-0.5">{{ n.body || 'No details provided.' }}</p>
+                    <p class="text-[10px] text-slate-400 mt-1">{{ n.created_at | date:'short' }}</p>
+                  </div>
+                  <div *ngIf="!n.read_at" class="w-2 h-2 bg-[#F16D22] rounded-full mt-2 shrink-0"></div>
+                </div>
+              </div>
+            </div>
+          </p-popover>
+          
+          <button class="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center hover:bg-slate-200 text-slate-555 hover:text-slate-850 transition-all">
+            <i class="pi pi-comments text-sm"></i>
+          </button>
+        </div>
+
+        <!-- User profile avatar & store name -->
+        <div class="flex items-center gap-2 pl-3 border-l border-slate-200">
+          <div class="text-right hidden sm:block">
+            <div class="text-xs font-semibold text-slate-700">{{ auth.store()?.name ?? 'Fikri Store' }}</div>
+            <div class="text-[10px] text-slate-500 font-medium capitalize">{{ auth.store()?.role ?? 'Owner' }}</div>
+          </div>
+          <img 
+            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=60" 
+            alt="User avatar" 
+            class="w-8 h-8 rounded-lg object-cover ring-2 ring-[#F16D22]/30"
+          />
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN ROUTER CONTAINER -->
+    <main class="flex-1 overflow-y-auto bg-slate-50 text-slate-700">
+      <router-outlet></router-outlet>
+    </main>
+
+  </div>
+</div>

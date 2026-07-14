@@ -1,0 +1,406 @@
+<div class="flex-1 p-6 md:p-8 bg-slate-50 min-h-screen text-slate-800">
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+    <div>
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Hey, {{ getFirstName() }}</h1>
+        <button class="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-250 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors border border-slate-200">
+          <i class="pi pi-sync text-[10px]"></i>
+        </button>
+      </div>
+      <p class="text-slate-450 text-sm mt-1">{{ getCurrentDate() }}</p>
+    </div>
+    
+    <div class="flex items-center gap-3">
+      <!-- "This Month" Button -->
+      <button class="flex items-center gap-2 px-4 py-2 bg-[#0D0D1C] hover:bg-[#1A1A2E] text-white text-xs font-semibold rounded-lg shadow-sm transition-colors">
+        <i class="pi pi-calendar text-xs"></i>
+        <span>This Month</span>
+      </button>
+      
+      <!-- "Compare: Last Month" Button -->
+      <button class="flex items-center gap-2 px-4 py-2 bg-[#0D0D1C] hover:bg-[#1A1A2E] text-white text-xs font-semibold rounded-lg shadow-sm transition-colors">
+        <i class="pi pi-copy text-xs"></i>
+        <span>Compare: Last Month</span>
+      </button>
+      
+      <!-- "Edit Widget" Button -->
+      <button class="flex items-center gap-2 px-3 py-2 bg-transparent hover:bg-slate-200/50 text-slate-700 text-xs font-semibold rounded-lg transition-colors border border-transparent">
+        <i class="pi pi-cog text-xs"></i>
+        <span>Edit Widget</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <ng-container *ngIf="loading()">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <p-skeleton width="100%" height="100px" styleClass="rounded-xl" *ngFor="let i of [1,2,3,4]"></p-skeleton>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <p-skeleton width="100%" height="380px" styleClass="col-span-2 rounded-xl"></p-skeleton>
+      <p-skeleton width="100%" height="380px" styleClass="rounded-xl"></p-skeleton>
+    </div>
+  </ng-container>
+
+  <!-- Loaded State -->
+  <ng-container *ngIf="!loading() && data() as dashboard">
+    
+    <!-- KPI Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <!-- 1. Sales Performance -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between">
+        <div class="flex items-center gap-2 text-slate-400 mb-2">
+          <i class="pi pi-chart-line text-sm"></i>
+          <span class="text-xs font-semibold tracking-wide">{{ dashboard.kpis.sales_performance.label }}</span>
+        </div>
+        <div class="flex items-baseline gap-2.5 mt-1">
+          <span class="text-2xl font-bold text-slate-900">{{ dashboard.kpis.sales_performance.value }}</span>
+          <span class="flex items-center text-xs font-bold text-emerald-500">
+            <i class="pi pi-arrow-up text-[9px] mr-0.5"></i>
+            {{ dashboard.kpis.sales_performance.delta_percent }}%
+          </span>
+          <span class="text-slate-400 text-[10px] font-medium ml-auto">vs last month</span>
+        </div>
+      </div>
+
+      <!-- 2. Total Sales -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between">
+        <div class="flex items-center gap-2 text-slate-400 mb-2">
+          <i class="pi pi-tags text-sm"></i>
+          <span class="text-xs font-semibold tracking-wide">{{ dashboard.kpis.total_sales.label }}</span>
+        </div>
+        <div class="flex items-baseline gap-2.5 mt-1">
+          <span class="text-2xl font-bold text-slate-900">{{ dashboard.kpis.total_sales.value }}</span>
+          <span class="flex items-center text-xs font-bold text-emerald-500">
+            <i class="pi pi-arrow-up text-[9px] mr-0.5"></i>
+            {{ dashboard.kpis.total_sales.delta_percent }}%
+          </span>
+          <span class="text-slate-400 text-[10px] font-medium ml-auto">vs last month</span>
+        </div>
+      </div>
+
+      <!-- 3. Average Revenue -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between">
+        <div class="flex items-center gap-2 text-slate-400 mb-2">
+          <i class="pi pi-wallet text-sm"></i>
+          <span class="text-xs font-semibold tracking-wide">{{ dashboard.kpis.average_revenue.label }}</span>
+        </div>
+        <div class="flex items-baseline gap-2.5 mt-1">
+          <span class="text-2xl font-bold text-slate-900">{{ dashboard.kpis.average_revenue.value }}</span>
+          <span class="flex items-center text-xs font-bold text-emerald-500">
+            <i class="pi pi-arrow-up text-[9px] mr-0.5"></i>
+            {{ dashboard.kpis.average_revenue.delta_percent }}%
+          </span>
+          <span class="text-slate-400 text-[10px] font-medium ml-auto">vs last month</span>
+        </div>
+      </div>
+
+      <!-- 4. Average Order -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between">
+        <div class="flex items-center gap-2 text-slate-400 mb-2">
+          <i class="pi pi-shopping-bag text-sm"></i>
+          <span class="text-xs font-semibold tracking-wide">{{ dashboard.kpis.average_order.label }}</span>
+        </div>
+        <div class="flex items-baseline gap-2.5 mt-1">
+          <span class="text-2xl font-bold text-slate-900">{{ dashboard.kpis.average_order.value }}</span>
+          <span class="flex items-center text-xs font-bold text-rose-500">
+            <i class="pi pi-arrow-down text-[9px] mr-0.5"></i>
+            {{ dashboard.kpis.average_order.delta_percent }}%
+          </span>
+          <span class="text-slate-400 text-[10px] font-medium ml-auto">vs last month</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Chart Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      
+      <!-- Total Revenue (col-span-2) -->
+      <div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-slate-200/80">
+        <!-- Card Header -->
+        <div class="flex justify-between items-center mb-6">
+          <div class="flex items-center">
+            <h3 class="font-bold text-base text-slate-900">Total Revenue</h3>
+            <i class="pi pi-question-circle text-slate-300 text-xs hover:text-slate-500 cursor-pointer ml-1.5" title="Revenue performance trend"></i>
+          </div>
+          <div class="flex items-center">
+            <button class="text-slate-800 hover:text-slate-950 font-bold text-xs border-r border-slate-200 pr-3 mr-3 hover:underline">
+              View More
+            </button>
+            <div class="border border-slate-250 bg-white rounded-lg flex items-center p-1 px-1.5 gap-2.5">
+              <i class="pi pi-expand text-slate-400 hover:text-slate-700 text-xs cursor-pointer" title="Expand"></i>
+              <i class="pi pi-ellipsis-h text-slate-400 hover:text-slate-700 text-xs cursor-pointer" title="More Actions"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Value & Legend Row -->
+        <div class="flex justify-between items-end mb-4">
+          <div class="flex items-baseline">
+            <span class="text-3xl font-extrabold text-slate-900">$94,127</span>
+            <span class="flex items-center text-xs font-bold text-emerald-500 ml-2">
+              <i class="pi pi-arrow-up text-[9px] mr-0.5"></i>
+              9%
+            </span>
+            <span class="text-slate-400 text-xs ml-1.5 font-medium">vs last month</span>
+          </div>
+          <!-- Chart Legend -->
+          <div class="flex items-center gap-4 text-xs font-semibold text-slate-500">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#1e1e30]"></span>
+              This month
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#cbd5e1]"></span>
+              Last month
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="h-[250px] mt-2 relative">
+          <p-chart type="line" [data]="dashboard.total_revenue_chart" [options]="revenueChartOptions" height="250px"></p-chart>
+        </div>
+      </div>
+
+      <!-- Popular Product (col-span-1) -->
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200/80 flex flex-col">
+        <!-- Card Header -->
+        <div class="flex justify-between items-center mb-6">
+          <div class="flex items-center">
+            <h3 class="font-bold text-base text-slate-900">Popular Product</h3>
+            <i class="pi pi-question-circle text-slate-300 text-xs hover:text-slate-500 cursor-pointer ml-1.5" title="Top performing products by sales volume"></i>
+          </div>
+          <div class="flex items-center">
+            <button class="text-slate-800 hover:text-slate-950 font-bold text-xs border-r border-slate-200 pr-3 mr-3 hover:underline">
+              View More
+            </button>
+            <div class="border border-slate-250 bg-white rounded-lg flex items-center p-1 px-1.5 gap-2.5">
+              <i class="pi pi-expand text-slate-400 hover:text-slate-700 text-xs cursor-pointer" title="Expand"></i>
+              <i class="pi pi-ellipsis-h text-slate-400 hover:text-slate-700 text-xs cursor-pointer" title="More Actions"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Styled Progress List with Dotted Grid Background -->
+        <div class="flex-1 flex flex-col justify-between py-2">
+          <div class="relative w-full z-10 flex-1 flex flex-col justify-between gap-5">
+            <!-- Grid Lines Background -->
+            <div class="absolute inset-0 flex justify-between pointer-events-none z-0 pb-6 pr-[2px]">
+              <div class="border-l border-dashed border-slate-100 h-full"></div>
+              <div class="border-l border-dashed border-slate-100 h-full"></div>
+              <div class="border-l border-dashed border-slate-100 h-full"></div>
+              <div class="border-l border-dashed border-slate-100 h-full"></div>
+              <div class="border-l border-dashed border-slate-100 h-full"></div>
+            </div>
+
+            <!-- Items -->
+            <div class="flex flex-col gap-5 relative z-10">
+              <!-- Item 1: Macbook Air M2 -->
+              <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between text-xs font-semibold">
+                  <span class="text-slate-750 truncate max-w-[200px]">{{ dashboard.popular_products[0].name }}</span>
+                  <span class="text-slate-900 font-bold">{{ dashboard.popular_products[0].sales | number }} Sales</span>
+                </div>
+                <div class="w-full h-[6px] bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-[#F16D22] rounded-full" [style.width]="calculateProgress(dashboard.popular_products[0].sales, dashboard.popular_products[0].max_sales)"></div>
+                </div>
+              </div>
+
+              <!-- Item 2: Macbook Pro 14 -->
+              <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between text-xs font-semibold">
+                  <span class="text-slate-750 truncate max-w-[200px]">{{ dashboard.popular_products[1].name }}</span>
+                  <span class="text-slate-900 font-bold">{{ dashboard.popular_products[1].sales | number }} Sales</span>
+                </div>
+                <div class="w-full h-[6px] bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-[#c084fc] rounded-full" [style.width]="calculateProgress(dashboard.popular_products[1].sales, dashboard.popular_products[1].max_sales)"></div>
+                </div>
+              </div>
+
+              <!-- Item 3: Apple Mac Mini -->
+              <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between text-xs font-semibold">
+                  <span class="text-slate-750 truncate max-w-[200px]">{{ dashboard.popular_products[2].name }}</span>
+                  <span class="text-slate-900 font-bold">{{ dashboard.popular_products[2].sales | number }} Sales</span>
+                </div>
+                <div class="w-full h-[6px] bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-[#0D0D1C] rounded-full" [style.width]="calculateProgress(dashboard.popular_products[2].sales, dashboard.popular_products[2].max_sales)"></div>
+                </div>
+              </div>
+
+              <!-- Item 4: APPLE 32 Display -->
+              <div class="flex flex-col gap-1.5">
+                <div class="flex justify-between text-xs font-semibold">
+                  <span class="text-slate-750 truncate max-w-[200px]">{{ dashboard.popular_products[3].name }}</span>
+                  <span class="text-slate-900 font-bold">{{ dashboard.popular_products[3].sales | number }} Sales</span>
+                </div>
+                <div class="w-full h-[6px] bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-[#10b981] rounded-full" [style.width]="calculateProgress(dashboard.popular_products[3].sales, dashboard.popular_products[3].max_sales)"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- X-Axis Labels at the bottom -->
+            <div class="flex justify-between text-[10px] text-slate-400 font-bold mt-2 pt-2 border-t border-slate-100 z-10 relative">
+              <span>0</span>
+              <span>2K</span>
+              <span>4K</span>
+              <span>6K</span>
+              <span>8K</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- 1. Average Order Value -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center">
+            <h4 class="font-bold text-sm text-slate-900">Average Order Value</h4>
+            <i class="pi pi-question-circle text-slate-300 text-xs hover:text-slate-500 cursor-pointer ml-1.5" title="Average value per order"></i>
+          </div>
+          <div class="border border-slate-250 bg-white rounded-lg flex items-center p-1 px-1.5 gap-2">
+            <i class="pi pi-expand text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"></i>
+            <i class="pi pi-ellipsis-h text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"></i>
+          </div>
+        </div>
+
+        <!-- Value & Trend -->
+        <div class="flex items-baseline gap-2 mb-3">
+          <span class="text-2xl font-bold text-slate-900">$992</span>
+          <span class="flex items-center text-xs font-bold text-emerald-500">
+            <i class="pi pi-arrow-up text-[9px] mr-0.5"></i>
+            2.4%
+          </span>
+          <span class="text-slate-400 text-[10px] font-medium">vs last month</span>
+        </div>
+
+        <!-- Chart Container with custom dotted Avg Line overlay -->
+        <div class="h-[180px] relative">
+          <!-- Avg line positioned at 66.7% height (representing $1.0K relative to max $1.5K) -->
+          <div class="absolute left-0 right-[40px] bottom-[120px] border-t border-dashed border-slate-800 z-10 flex items-center">
+            <span class="bg-[#0d0d1c] text-white text-[9px] font-bold px-1.5 py-0.5 rounded -ml-1 shadow-sm">Avg</span>
+          </div>
+
+          <p-chart type="bar" [data]="dashboard.average_order_value_chart" [options]="orderValueChartOptions" height="180px"></p-chart>
+        </div>
+
+        <!-- Custom X Axis labels -->
+        <div class="flex justify-between text-[10px] text-slate-400 font-bold px-1.5 mt-2 border-t border-slate-50 pt-2">
+          <span>Feb 01</span>
+          <span>Feb 28</span>
+        </div>
+      </div>
+
+      <!-- 2. Average Sales -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center">
+            <h4 class="font-bold text-sm text-slate-900">Average Sales</h4>
+            <i class="pi pi-question-circle text-slate-300 text-xs hover:text-slate-500 cursor-pointer ml-1.5" title="Average sales quantity performance"></i>
+          </div>
+          <div class="border border-slate-250 bg-white rounded-lg flex items-center p-1 px-1.5 gap-2">
+            <i class="pi pi-expand text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"></i>
+            <i class="pi pi-ellipsis-h text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"></i>
+          </div>
+        </div>
+
+        <!-- Value & Trend & Legend -->
+        <div class="flex justify-between items-end mb-3">
+          <div class="flex items-baseline gap-2">
+            <span class="text-2xl font-bold text-slate-900">840</span>
+            <span class="flex items-center text-xs font-bold text-emerald-500">
+              <i class="pi pi-arrow-up text-[9px] mr-0.5"></i>
+              1.34%
+            </span>
+            <span class="text-slate-400 text-[10px] font-medium">vs last month</span>
+          </div>
+          
+          <div class="flex items-center gap-3 text-[10px] font-bold text-slate-500 mb-1">
+            <div class="flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-[#F16D22]"></span>
+              This month
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-[#fed7aa]"></span>
+              Last month
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart Container -->
+        <div class="h-[180px] relative">
+          <p-chart type="line" [data]="dashboard.average_sales_chart" [options]="salesChartOptions" height="180px"></p-chart>
+        </div>
+
+        <!-- Custom X Axis labels -->
+        <div class="flex justify-between text-[10px] text-slate-400 font-bold px-1.5 mt-2 border-t border-slate-50 pt-2">
+          <span>Feb 01</span>
+          <span>Feb 28</span>
+        </div>
+      </div>
+
+      <!-- 3. Total Sessions -->
+      <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center">
+            <h4 class="font-bold text-sm text-slate-900">Total Sessions</h4>
+            <i class="pi pi-question-circle text-slate-300 text-xs hover:text-slate-500 cursor-pointer ml-1.5" title="Total visitor sessions count"></i>
+          </div>
+          <div class="border border-slate-250 bg-white rounded-lg flex items-center p-1 px-1.5 gap-2">
+            <i class="pi pi-expand text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"></i>
+            <i class="pi pi-ellipsis-h text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"></i>
+          </div>
+        </div>
+
+        <!-- Value & Trend -->
+        <div class="flex items-baseline gap-2 mb-3">
+          <span class="text-2xl font-bold text-slate-900">11,240</span>
+          <span class="flex items-center text-xs font-bold text-emerald-500">
+            <i class="pi pi-arrow-up text-[9px] mr-0.5"></i>
+            4%
+          </span>
+          <span class="text-slate-400 text-[10px] font-medium">vs last month</span>
+        </div>
+
+        <!-- Filter Subtitle & Legend -->
+        <div class="flex justify-between items-center text-[10px] font-semibold text-slate-400 mb-2">
+          <span>User per 2 days</span>
+          <div class="flex items-center gap-3 text-slate-500">
+            <div class="flex items-center gap-1">
+              <span class="w-2.5 h-2.5 rounded bg-[#475569]"></span>
+              This month
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-2.5 h-2.5 rounded bg-[#cbd5e1]"></span>
+              Last month
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart Container -->
+        <div class="h-[180px] relative">
+          <p-chart type="bar" [data]="dashboard.total_sessions_chart" [options]="sessionsChartOptions" height="180px"></p-chart>
+        </div>
+
+        <!-- Custom X Axis labels -->
+        <div class="flex justify-between text-[10px] text-slate-400 font-bold px-1.5 mt-2 border-t border-slate-50 pt-2">
+          <span>Feb 01</span>
+          <span>Feb 28</span>
+        </div>
+      </div>
+
+    </div>
+
+  </ng-container>
+</div>

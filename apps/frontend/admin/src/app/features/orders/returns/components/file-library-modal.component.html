@@ -1,0 +1,124 @@
+<p-dialog [(visible)]="visible" (visibleChange)="close()" [modal]="true" [style]="{width: '900px', height: '650px'}" header="File Library" styleClass="p-0">
+  <div class="flex h-[550px] bg-slate-50 relative -mx-4 -mt-4">
+    
+    <!-- LEFT NAV -->
+    <div class="w-48 bg-white border-r border-slate-200 p-4 shrink-0 flex flex-col gap-1">
+      <button class="flex items-center gap-3 px-3 py-2 text-sm font-bold text-[#F16D22] bg-orange-50 rounded-lg w-full">
+        <i class="pi pi-clock"></i> Recent
+      </button>
+      <button class="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg w-full">
+        <i class="pi pi-folder"></i> Folder
+      </button>
+      <button class="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg w-full">
+        <i class="pi pi-file"></i> My File
+      </button>
+      <button class="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 rounded-lg w-full mt-auto">
+        <i class="pi pi-link"></i> Integrations
+      </button>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 flex flex-col min-w-0">
+      
+      <!-- TOOLBAR -->
+      <div class="p-4 bg-white border-b border-slate-200 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-3 w-64">
+          <span class="p-input-icon-left w-full">
+            <i class="pi pi-search text-slate-400"></i>
+            <input type="text" pInputText placeholder="Search files..." [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" class="w-full h-9 text-sm rounded-lg border-slate-300">
+          </span>
+        </div>
+        <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+          <button (click)="viewMode.set('grid')" [class]="viewMode() === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-slate-200 text-slate-500'" class="w-8 h-8 rounded flex items-center justify-center transition-all">
+            <i class="pi pi-th-large text-sm"></i>
+          </button>
+          <button (click)="viewMode.set('table')" [class]="viewMode() === 'table' ? 'bg-white shadow-sm' : 'hover:bg-slate-200 text-slate-500'" class="w-8 h-8 rounded flex items-center justify-center transition-all">
+            <i class="pi pi-list text-sm"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- FILE LIST -->
+      <div class="flex-1 overflow-y-auto p-6">
+        
+        <div *ngIf="loading()" class="flex justify-center items-center h-32">
+          <i class="pi pi-spin pi-spinner text-3xl text-slate-300"></i>
+        </div>
+
+        <div *ngIf="!loading() && viewMode() === 'grid'" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div *ngFor="let file of files()" 
+               (click)="selectFile(file.id)"
+               [class]="selectedFileId() === file.id ? 'ring-2 ring-[#F16D22] border-transparent' : 'border-slate-200 hover:border-slate-300'"
+               class="bg-white border rounded-xl overflow-hidden cursor-pointer transition-all shadow-sm group relative">
+            <div class="aspect-square bg-slate-100 relative">
+              <img *ngIf="file.type === 'image'" [src]="file.url" class="w-full h-full object-cover">
+              <div *ngIf="file.type !== 'image'" class="w-full h-full flex items-center justify-center">
+                <i [class]="file.type === 'video' ? 'pi pi-video' : 'pi pi-file'" class="text-4xl text-slate-300"></i>
+              </div>
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <button class="bg-white text-slate-800 w-8 h-8 rounded-full flex items-center justify-center shadow-sm">
+                  <i class="pi pi-eye text-sm"></i>
+                </button>
+              </div>
+            </div>
+            <div class="p-3">
+              <p class="text-sm font-bold text-slate-800 truncate">{{ file.name }}</p>
+              <div class="flex justify-between items-center mt-1">
+                <p class="text-xs text-slate-500">{{ file.size }}</p>
+                <i *ngIf="selectedFileId() === file.id" class="pi pi-check-circle text-[#F16D22]"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="!loading() && viewMode() === 'table'" class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500">
+              <tr>
+                <th class="py-3 px-4 font-semibold">Name</th>
+                <th class="py-3 px-4 font-semibold">Owner</th>
+                <th class="py-3 px-4 font-semibold">Last Modified</th>
+                <th class="py-3 px-4 font-semibold">File size</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr *ngFor="let file of files()" 
+                  (click)="selectFile(file.id)"
+                  [class]="selectedFileId() === file.id ? 'bg-orange-50/50' : 'hover:bg-slate-50'"
+                  class="cursor-pointer transition-colors group">
+                <td class="py-3 px-4 flex items-center gap-3">
+                  <div class="w-10 h-10 rounded border border-slate-200 bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">
+                     <img *ngIf="file.type === 'image'" [src]="file.url" class="w-full h-full object-cover">
+                     <i *ngIf="file.type !== 'image'" [class]="file.type === 'video' ? 'pi pi-video' : 'pi pi-file'" class="text-slate-400"></i>
+                  </div>
+                  <span class="font-semibold text-slate-800 truncate">{{ file.name }}</span>
+                </td>
+                <td class="py-3 px-4 text-slate-600">{{ file.owner }}</td>
+                <td class="py-3 px-4 text-slate-600">{{ file.last_modified | date:'mediumDate' }}</td>
+                <td class="py-3 px-4 text-slate-600">
+                  <div class="flex items-center justify-between">
+                    <span>{{ file.size }}</span>
+                    <i *ngIf="selectedFileId() === file.id" class="pi pi-check-circle text-[#F16D22]"></i>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex justify-between items-center w-full">
+      <div class="text-sm text-slate-500">
+        <span *ngIf="selectedFileId()" class="font-medium text-slate-800">1</span> file selected
+      </div>
+      <div class="flex gap-2">
+        <button class="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg text-sm transition-colors" (click)="close()">Cancel</button>
+        <button class="px-6 py-2 bg-slate-900 text-white font-bold hover:bg-slate-800 rounded-lg text-sm shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" [disabled]="!selectedFileId()" (click)="saveSelection()">Save selection</button>
+      </div>
+    </div>
+  </ng-template>
+</p-dialog>

@@ -1,0 +1,30 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "baseUrl": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "paths": {
+      "@temp-nx/auth": ["./libs/shared/auth/src/index.ts"],
+      "@temp-nx/typeorm": ["./libs/shared/typeorm/src/index.ts"],
+      "@temp-nx/pulsar": ["./libs/shared/pulsar/src/index.ts"],
+      "@temp-nx/contracts": ["./libs/contracts/src/index.ts"],
+      "@temp-nx/api-types": ["./libs/shared/api-types/src/index.ts"],
+      "@temp-nx/api-types/*": [
+        "./libs/shared/api-types/src/*/index.ts",
+        "./libs/shared/api-types/src/*.ts"
+      ]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

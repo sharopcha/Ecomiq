@@ -1,0 +1,89 @@
+<p-dialog 
+  [visible]="visible" 
+  (visibleChange)="hide()" 
+  [modal]="true" 
+  header="Fulfill Items"
+  [style]="{ width: '600px' }" 
+  [draggable]="false"
+  [resizable]="false"
+  styleClass="p-0"
+>
+  <div class="flex flex-col gap-6 p-2">
+    <!-- Info -->
+    <div class="text-sm text-slate-600 border-b border-slate-200 pb-4">
+      Select the quantity for each item you are fulfilling. You can fulfill parts of the order now and the rest later.
+    </div>
+
+    <!-- Items List -->
+    <div class="flex flex-col gap-4">
+      <div *ngFor="let item of items" class="flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-lg">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-white border border-slate-200 rounded flex items-center justify-center">
+            <i class="pi pi-box text-slate-400"></i>
+          </div>
+          <div>
+            <div class="font-bold text-slate-800 text-sm">{{ item.name }}</div>
+            <div class="text-xs text-slate-500 font-mono">{{ item.sku }}</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 font-medium">of {{ item.maxQty }}</span>
+          <p-inputnumber 
+            [(ngModel)]="item.qtyToFulfill" 
+            [showButtons]="true" 
+            buttonLayout="horizontal" 
+            spinnerMode="horizontal" 
+            [min]="0" 
+            [max]="item.maxQty"
+            styleClass="w-24 text-center text-sm font-bold border-slate-300 h-8"
+            decrementButtonClass="p-button-secondary p-button-text bg-white"
+            incrementButtonClass="p-button-secondary p-button-text bg-white">
+          </p-inputnumber>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tracking Numbers -->
+    <div class="flex flex-col gap-3 mt-2">
+      <label class="text-sm font-bold text-slate-800">Tracking Information</label>
+      
+      <div *ngFor="let t of trackingNumbers(); let i = index" class="flex items-center gap-2">
+        <span class="p-input-icon-left flex-1">
+          <i class="pi pi-barcode text-slate-400"></i>
+          <input pInputText type="text" [ngModel]="t" (ngModelChange)="updateTracking(i, $event)" placeholder="Enter tracking number" class="w-full h-10 pl-8 text-sm border-slate-300 rounded-lg focus:border-[#F16D22] focus:ring-[#F16D22]">
+        </span>
+        <button *ngIf="trackingNumbers().length > 1" (click)="removeTracking(i)" class="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+          <i class="pi pi-trash text-sm"></i>
+        </button>
+      </div>
+
+      <button (click)="addTracking()" class="text-[#F16D22] text-sm font-bold flex items-center gap-2 hover:underline w-fit mt-1">
+        <i class="pi pi-plus-circle"></i> Add another tracking number
+      </button>
+    </div>
+
+    <!-- Notify -->
+    <div class="flex items-center gap-2 mt-4">
+      <p-checkbox [ngModel]="notifyCustomer()" (ngModelChange)="notifyCustomer.set($event)" [binary]="true" inputId="notify"></p-checkbox>
+      <label for="notify" class="text-sm font-medium text-slate-700 cursor-pointer">Send notification email to customer</label>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex justify-end gap-2 w-full pt-4 border-t border-slate-100">
+      <button 
+        class="px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="hide()"
+        [disabled]="submitting()">
+        Cancel
+      </button>
+      <button 
+        class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] disabled:bg-slate-300 disabled:cursor-not-allowed text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2"
+        (click)="confirm()"
+        [disabled]="submitting()">
+        <i *ngIf="submitting()" class="pi pi-spin pi-spinner text-xs"></i>
+        Fulfill Items
+      </button>
+    </div>
+  </ng-template>
+</p-dialog>

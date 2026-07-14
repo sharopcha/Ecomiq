@@ -1,0 +1,152 @@
+<p-dialog
+  [visible]="visible"
+  (visibleChange)="visibleChange.emit($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [dismissableMask]="true"
+  [style]="{ width: '40rem' }"
+  styleClass="font-sans"
+>
+  <ng-template pTemplate="header">
+    <div class="flex items-start gap-3">
+      <div class="w-11 h-11 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F16D22] shrink-0">
+        <i class="pi pi-lock text-lg"></i>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-base font-bold text-slate-900">Reserve Item</span>
+        <span class="text-xs text-slate-500 mt-0.5">Secure stock for 24 hours — the reservation auto-expires after that.</span>
+      </div>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-5 py-2 text-slate-700">
+    <!-- Product summary -->
+    <div class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/60">
+      <div class="w-12 h-10 rounded-lg border border-slate-200 bg-white flex items-center justify-center shrink-0">
+        <i class="pi pi-image text-slate-300"></i>
+      </div>
+      <div class="min-w-0">
+        <div class="text-xs font-bold text-slate-800 line-clamp-1">{{ row.product_name || 'Unknown product' }}</div>
+        <div class="text-[10px] text-slate-500 font-mono mt-0.5">SKU: {{ row.sku }} · {{ row.available }} unit available</div>
+      </div>
+    </div>
+
+    <!-- Warehouse picker (only needed for aggregated rows) -->
+    @if (!row.id) {
+      <section class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Warehouse</label>
+        <p-select
+          [options]="locationOptions"
+          [ngModel]="selectedLocationId()"
+          (ngModelChange)="onLocationChange($event)"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Select warehouse"
+          styleClass="w-full bg-white text-xs"
+        ></p-select>
+        @if (resolving()) {
+          <span class="text-[10px] text-slate-400"><i class="pi pi-spin pi-spinner text-[10px]"></i> Resolving stock cell…</span>
+        }
+      </section>
+    }
+
+    <!-- Qty + optional order refs -->
+    <div class="grid grid-cols-3 gap-4">
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Quantity</label>
+        <p-inputnumber
+          [ngModel]="qty()"
+          (ngModelChange)="qty.set($event)"
+          [min]="1"
+          [showButtons]="false"
+          placeholder="00"
+          suffix=" Unit"
+          styleClass="w-full"
+          inputStyleClass="w-full bg-white text-xs"
+        ></p-inputnumber>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Order ID <span class="font-normal text-slate-400">(optional)</span></label>
+        <input
+          pInputText
+          [ngModel]="orderId()"
+          (ngModelChange)="orderId.set($event)"
+          placeholder="ord-…"
+          class="w-full bg-white text-xs"
+        />
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Order Line ID <span class="font-normal text-slate-400">(optional)</span></label>
+        <input
+          pInputText
+          [ngModel]="orderLineId()"
+          (ngModelChange)="orderLineId.set($event)"
+          placeholder="line-…"
+          class="w-full bg-white text-xs"
+        />
+      </div>
+    </div>
+
+    @if (errorMessage()) {
+      <div class="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+        {{ errorMessage() }}
+      </div>
+    }
+
+    <!-- Existing reservations -->
+    <section class="flex flex-col gap-2">
+      <h4 class="text-sm font-bold text-slate-900">Reservations for this item</h4>
+      @if (reservationsLoading()) {
+        <i class="pi pi-spin pi-spinner text-slate-400 text-sm"></i>
+      } @else if (reservations().length === 0) {
+        <span class="text-xs text-slate-400">No reservations yet.</span>
+      } @else {
+        <div class="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto">
+          @for (r of reservations(); track r.id) {
+            <div class="flex items-center justify-between px-3 py-2 bg-white text-xs">
+              <div class="flex flex-col">
+                <span class="font-semibold text-slate-800">{{ r.qty }} unit</span>
+                <span class="text-[10px] text-slate-400">
+                  @if (r.released_at) {
+                    Released {{ r.released_at | date: 'dd MMM yyyy, HH:mm' }}
+                  } @else {
+                    Until {{ r.reserved_until | date: 'dd MMM yyyy, HH:mm' }}
+                    @if (r.order_id) { · Order {{ r.order_id }} }
+                  }
+                </span>
+              </div>
+              @if (isActive(r)) {
+                <p-button
+                  label="Release"
+                  size="small"
+                  [text]="true"
+                  severity="danger"
+                  [loading]="releasingId() === r.id"
+                  (onClick)="release(r)"
+                ></p-button>
+              } @else {
+                <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                  {{ r.released_at ? 'Released' : 'Expired' }}
+                </span>
+              }
+            </div>
+          }
+        </div>
+      }
+    </section>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex items-center justify-between w-full">
+      <span class="text-xs text-slate-500">
+        Learn more about <a class="text-[#F16D22] font-medium hover:underline cursor-pointer">Reservations</a>
+      </span>
+      <div class="flex items-center gap-2">
+        <p-button label="Cancel" [text]="true" severity="secondary" size="small" (onClick)="close()"></p-button>
+        <p-button label="Reserve" size="small" [disabled]="!canSave" [loading]="saving()" (onClick)="save()"></p-button>
+      </div>
+    </div>
+  </ng-template>
+</p-dialog>

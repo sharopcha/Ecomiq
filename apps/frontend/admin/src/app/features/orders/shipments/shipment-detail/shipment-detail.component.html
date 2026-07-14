@@ -1,0 +1,183 @@
+<div class="flex h-[calc(100vh-4rem)] overflow-hidden" *ngIf="shipment() as shipmentData">
+  
+  <!-- LEFT COLUMN: Content -->
+  <div class="flex-1 overflow-y-auto bg-slate-50 border-r border-slate-200">
+    <div class="p-6 max-w-3xl mx-auto">
+      
+      <!-- Top nav -->
+      <div class="flex items-center gap-4 mb-6">
+        <a routerLink="/orders/shipments" class="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors">
+          <i class="pi pi-arrow-left text-xs"></i>
+        </a>
+        <div class="flex-1 flex justify-between items-center">
+          <div class="flex items-center gap-3">
+            <h1 class="text-xl font-bold tracking-tight text-slate-950">{{ shipmentData.display_id }}</h1>
+            <span [class]="getStatusClass(shipmentData.status)">{{ shipmentData.status.replace('_', ' ') }}</span>
+            <span *ngIf="shipmentData.is_delayed" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border text-red-600 bg-red-50 border-red-200 flex items-center gap-1">
+              <i class="pi pi-exclamation-triangle text-[10px]"></i> Delay
+            </span>
+          </div>
+          <div class="text-sm text-slate-500">
+            <span class="mr-2">Shipment {{ shipmentData.id | slice:0:8 }}</span>
+            <button class="w-8 h-8 rounded hover:bg-slate-200 inline-flex items-center justify-center"><i class="pi pi-chevron-left text-xs"></i></button>
+            <button class="w-8 h-8 rounded hover:bg-slate-200 inline-flex items-center justify-center"><i class="pi pi-chevron-right text-xs"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Bar -->
+      <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-4 text-sm">
+          <div class="text-slate-500">
+            Shipping Date: <span class="font-bold text-slate-800">{{ shipmentData.ship_date | date }}</span>
+          </div>
+          <div class="w-px h-4 bg-slate-300"></div>
+          <a [routerLink]="['/orders', shipmentData.order_id]" class="text-[#F16D22] font-semibold hover:underline flex items-center gap-1">
+            Order {{ shipmentData.order_id | slice:0:8 }} <i class="pi pi-external-link text-[10px]"></i>
+          </a>
+        </div>
+        <div class="flex items-center gap-3">
+          <button (click)="cancelShipment()" class="text-red-500 font-semibold text-sm hover:underline">Cancel Order</button>
+          <button class="w-9 h-9 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-50 shadow-sm">
+            <i class="pi pi-envelope text-sm"></i>
+          </button>
+          <button class="px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2">
+            Notify Customer
+          </button>
+        </div>
+      </div>
+
+      <!-- Delay Banner -->
+      <div *ngIf="shipmentData.is_delayed" class="mb-6 bg-red-50 border border-red-200 p-4 rounded-xl flex gap-3 text-red-800 animate-fadein">
+        <i class="pi pi-exclamation-triangle mt-0.5"></i>
+        <div>
+          <h3 class="font-bold text-sm">Shipment Delayed</h3>
+          <p class="text-sm mt-1 opacity-90">{{ shipmentData.delay_reason || 'This shipment has encountered an unexpected delay.' }}</p>
+        </div>
+      </div>
+
+      <!-- Route Card & Progress -->
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+        <!-- Addresses -->
+        <div class="flex justify-between items-start mb-8 relative">
+          
+          <div class="flex flex-col flex-1">
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">From</div>
+            <div class="font-bold text-slate-800">{{ $any(shipmentData.origin_address)?.city || 'Origin' }}</div>
+            <div class="text-sm text-slate-500">{{ $any(shipmentData.origin_address)?.country || '--' }}</div>
+          </div>
+
+          <div class="flex flex-col items-center flex-1 px-4 relative z-10">
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Carrier</div>
+            <img *ngIf="shipmentData.carrier" src="https://upload.wikimedia.org/wikipedia/commons/9/9d/FedEx_Express.svg" class="h-4 object-contain mb-1 opacity-50 grayscale" alt="carrier">
+            <div class="font-bold text-slate-700 text-sm">{{ shipmentData.carrier || 'Unknown Carrier' }}</div>
+            <div class="w-full h-px border-t border-dashed border-slate-300 mt-4 relative">
+              <i class="pi pi-truck text-slate-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-2"></i>
+            </div>
+          </div>
+
+          <div class="flex flex-col flex-1 text-right">
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">To</div>
+            <div class="font-bold text-slate-800">{{ $any(shipmentData.destination_address)?.city || 'Destination' }}</div>
+            <div class="text-sm text-slate-500">{{ $any(shipmentData.destination_address)?.country || '--' }}</div>
+          </div>
+        </div>
+
+        <!-- Progress 4-step -->
+        <div class="flex justify-between relative mb-8">
+          <div class="absolute top-2.5 left-6 right-6 h-0.5 bg-slate-100 -z-10"></div>
+          <div class="absolute top-2.5 left-6 h-0.5 bg-emerald-500 -z-10 transition-all duration-500" [style.width]="(shipmentData.current_stage * 33.33) + '%'"></div>
+
+          <div class="flex flex-col items-center gap-2 flex-1">
+            <div class="w-6 h-6 bg-white rounded-full flex items-center justify-center"><i [class]="getStageIconClass(shipmentData, 0)"></i></div>
+            <span class="text-xs text-center" [class]="getStageLabelClass(shipmentData, 0)">Label<br>Created</span>
+          </div>
+          <div class="flex flex-col items-center gap-2 flex-1">
+            <div class="w-6 h-6 bg-white rounded-full flex items-center justify-center"><i [class]="getStageIconClass(shipmentData, 1)"></i></div>
+            <span class="text-xs text-center" [class]="getStageLabelClass(shipmentData, 1)">Picked<br>Up</span>
+          </div>
+          <div class="flex flex-col items-center gap-2 flex-1">
+            <div class="w-6 h-6 bg-white rounded-full flex items-center justify-center"><i [class]="getStageIconClass(shipmentData, 2)"></i></div>
+            <span class="text-xs text-center" [class]="getStageLabelClass(shipmentData, 2)">In<br>Transit</span>
+          </div>
+          <div class="flex flex-col items-center gap-2 flex-1">
+            <div class="w-6 h-6 bg-white rounded-full flex items-center justify-center"><i [class]="getStageIconClass(shipmentData, 3)"></i></div>
+            <span class="text-xs text-center" [class]="getStageLabelClass(shipmentData, 3)">Delivered</span>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="flex justify-between bg-slate-50 border border-slate-100 rounded-lg p-4">
+          <div class="flex flex-col">
+            <span class="text-xs text-slate-500 font-medium">Total Time</span>
+            <span class="font-bold text-slate-800">{{ shipmentData.total_time_interval || '--' }}</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-xs text-slate-500 font-medium">Departure Time</span>
+            <span class="font-bold text-slate-800">{{ shipmentData.departure_at ? (shipmentData.departure_at | date:'medium') : '--' }}</span>
+          </div>
+          <div class="flex flex-col text-right">
+            <span class="text-xs text-slate-500 font-medium">Expected Arrived</span>
+            <span class="font-bold text-[#F16D22]">{{ shipmentData.expected_arrival_at ? (shipmentData.expected_arrival_at | date:'medium') : '--' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vertical Timeline -->
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+        <h2 class="text-lg font-bold text-slate-800 mb-6">Shipment Status</h2>
+        
+        <div class="relative pl-6 border-l-2 border-slate-100 flex flex-col gap-8 pb-4">
+          <div *ngFor="let ev of shipmentData.events; let last = last" class="relative">
+            <!-- Timeline dot -->
+            <div class="absolute -left-[29px] top-1 w-3 h-3 rounded-full border-2 border-white bg-blue-500 shadow-sm z-10" [class.bg-emerald-500]="last && shipmentData.status === 'arrived'" [class.bg-blue-500]="!last || shipmentData.status !== 'arrived'"></div>
+            
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1 sm:gap-4">
+              <div>
+                <div class="font-bold text-slate-800 text-sm mb-1">{{ ev.kind.replace(/_/g, ' ') | titlecase }}</div>
+                <div class="text-sm text-slate-600 leading-relaxed" *ngIf="ev.description">{{ ev.description }}</div>
+                <div class="text-xs font-semibold text-slate-500 mt-1 flex items-center gap-1" *ngIf="ev.location">
+                  <i class="pi pi-map-marker text-[10px]"></i> {{ ev.location }}
+                </div>
+              </div>
+              <div class="text-xs font-medium text-slate-400 whitespace-nowrap mt-1 sm:mt-0">
+                {{ ev.occurred_at | date:'MMM d, y, h:mm a' }}
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="!shipmentData.events?.length" class="text-sm text-slate-400 italic">
+            No events recorded yet.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: Map Mock -->
+  <div class="w-2/5 border-l border-slate-200 bg-slate-100 relative hidden lg:block">
+    <div class="absolute inset-0 w-full h-full bg-cover bg-center opacity-80" [style.backgroundImage]="'url(' + mapUrl() + ')'" *ngIf="mapUrl()"></div>
+    <div class="absolute inset-0 flex items-center justify-center" *ngIf="!mapUrl()">
+      <div class="text-slate-400 font-bold flex items-center gap-2">
+        <i class="pi pi-map text-xl"></i> Loading Map...
+      </div>
+    </div>
+
+    <!-- Map controls overlay mock -->
+    <div class="absolute top-4 right-4 flex bg-white rounded shadow-sm border border-slate-200 overflow-hidden">
+      <button class="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-700">Map</button>
+      <button class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50">Satellite</button>
+    </div>
+    <div class="absolute bottom-8 right-4 flex flex-col bg-white rounded shadow-sm border border-slate-200 overflow-hidden">
+      <button class="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-slate-50 border-b border-slate-100"><i class="pi pi-plus"></i></button>
+      <button class="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-slate-50"><i class="pi pi-minus"></i></button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Loading State -->
+<div *ngIf="!shipment()" class="flex-1 flex items-center justify-center h-64">
+  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F16D22]"></div>
+</div>

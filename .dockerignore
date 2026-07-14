@@ -1,0 +1,14 @@
+node_modules
+dist
+tmp
+out-tsc
+coverage
+.nx/cache
+.nx/workspace-data
+.git
+.angular
+*.log
+.env
+.env.*
+!.env.example
+apps/services/*/keys/

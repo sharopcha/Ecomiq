@@ -1,0 +1,256 @@
+<p-dialog
+  [visible]="visible"
+  (visibleChange)="visibleChange.emit($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [dismissableMask]="true"
+  [style]="{ width: '58rem' }"
+  styleClass="font-sans"
+>
+  <ng-template pTemplate="header">
+    <div class="flex items-start gap-3">
+      <div class="w-11 h-11 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F16D22] shrink-0">
+        <i class="pi pi-check-square text-lg"></i>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-base font-bold text-slate-900">Audit Stock</span>
+        <span class="text-xs text-slate-500 mt-0.5">Effortlessly import products and update your inventory.</span>
+      </div>
+    </div>
+  </ng-template>
+
+  <div class="flex gap-6 py-2 text-slate-700">
+    <!-- LEFT: form -->
+    <div class="flex-1 min-w-0 flex flex-col gap-5">
+
+      <!-- Warehouse picker (only needed for aggregated rows) -->
+      @if (!row.id) {
+        <section class="flex flex-col gap-2">
+          <h4 class="text-xs font-bold text-slate-900">Warehouse</h4>
+          <p-select
+            [options]="locationOptions"
+            [ngModel]="selectedLocationId()"
+            (ngModelChange)="onLocationChange($event)"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Select warehouse"
+            styleClass="w-full bg-white text-xs"
+          ></p-select>
+          @if (resolving()) {
+            <span class="text-[10px] text-slate-400"><i class="pi pi-spin pi-spinner text-[10px]"></i> Resolving stock cell…</span>
+          }
+        </section>
+      }
+
+      <!-- Adjustment Type -->
+      <section class="flex flex-col gap-2">
+        <h4 class="text-xs font-bold text-slate-900">Adjustment Type</h4>
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            (click)="adjustType.set('quantity')"
+            [class]="adjustType() === 'quantity'
+              ? 'flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-[#F16D22] bg-orange-50/50 text-xs font-bold text-slate-900 transition-all'
+              : 'flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:border-slate-300 transition-all'"
+          >
+            <i class="pi pi-circle-fill text-[8px]" [class.text-[#F16D22]]="adjustType() === 'quantity'" [class.text-slate-300]="adjustType() !== 'quantity'"></i>
+            Quantity Adjustment
+          </button>
+          <button
+            type="button"
+            (click)="adjustType.set('value')"
+            [class]="adjustType() === 'value'
+              ? 'flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-[#F16D22] bg-orange-50/50 text-xs font-bold text-slate-900 transition-all'
+              : 'flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:border-slate-300 transition-all'"
+          >
+            <i class="pi pi-circle-fill text-[8px]" [class.text-[#F16D22]]="adjustType() === 'value'" [class.text-slate-300]="adjustType() !== 'value'"></i>
+            Value Adjustment
+          </button>
+        </div>
+      </section>
+
+      <!-- Quantity mode -->
+      @if (adjustType() === 'quantity') {
+        <section class="grid grid-cols-3 gap-3">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-bold text-slate-900">Physical Count</label>
+            <p-inputnumber
+              [ngModel]="physicalCount()"
+              (ngModelChange)="physicalCount.set($event)"
+              [min]="0"
+              [showButtons]="false"
+              placeholder="00"
+              suffix=" Unit"
+              styleClass="w-full"
+              inputStyleClass="w-full bg-white text-xs"
+            ></p-inputnumber>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-bold text-slate-900">Available</label>
+            <div class="h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center text-xs text-slate-600">
+              {{ row.available }} Unit
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-bold text-slate-900">Discrepancy</label>
+            <div class="h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center text-xs"
+                 [class.text-red-600]="(discrepancy ?? 0) < 0"
+                 [class.text-emerald-600]="(discrepancy ?? 0) > 0"
+                 [class.text-slate-600]="(discrepancy ?? 0) === 0">
+              {{ discrepancy === null ? '00' : discrepancy }} Unit
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- Value mode -->
+      @if (adjustType() === 'value') {
+        <section class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-bold text-slate-900">Value Delta</label>
+            <p-inputnumber
+              [ngModel]="valueDelta()"
+              (ngModelChange)="valueDelta.set($event)"
+              mode="currency"
+              currency="USD"
+              [minFractionDigits]="2"
+              placeholder="$0.00"
+              styleClass="w-full"
+              inputStyleClass="w-full bg-white text-xs"
+            ></p-inputnumber>
+            <span class="text-[10px] text-slate-400">Positive or negative adjustment to the stock value.</span>
+          </div>
+        </section>
+      }
+
+      <!-- Adjustment Reason -->
+      <section class="flex flex-col gap-2">
+        <h4 class="text-xs font-bold text-slate-900">Adjustment Reason</h4>
+        <div class="grid grid-cols-2 gap-3">
+          @for (r of reasons; track r.value) {
+            <button
+              type="button"
+              (click)="reason.set(r.value)"
+              [class]="reason() === r.value
+                ? 'flex items-center justify-between px-4 py-2.5 rounded-lg border-2 border-[#F16D22] bg-orange-50/50 text-xs font-bold text-slate-900 transition-all'
+                : 'flex items-center justify-between px-4 py-2.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:border-slate-300 transition-all'"
+            >
+              <span class="flex items-center gap-2"><i [class]="r.icon + ' text-sm'"></i> {{ r.label }}</span>
+              <i class="pi pi-circle-fill text-[8px]" [class.text-[#F16D22]]="reason() === r.value" [class.text-slate-300]="reason() !== r.value"></i>
+            </button>
+          }
+        </div>
+      </section>
+
+      <!-- Note -->
+      <section class="flex flex-col gap-2">
+        <h4 class="text-xs font-bold text-slate-900">Note</h4>
+        <textarea
+          [ngModel]="note()"
+          (ngModelChange)="note.set($event)"
+          rows="4"
+          placeholder="Evaluate if the damage is repairable or if the item needs to be written off."
+          class="w-full p-3 bg-white text-slate-700 rounded-lg text-xs border border-slate-200 focus:outline-none focus:border-[#F16D22]/60 placeholder-slate-400 transition-all resize-none"
+        ></textarea>
+      </section>
+
+      @if (errorMessage()) {
+        <div class="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+          {{ errorMessage() }}
+        </div>
+      }
+    </div>
+
+    <!-- RIGHT: product detail + adjustment history rail -->
+    <div class="w-72 shrink-0 border-l border-slate-200 pl-6 flex flex-col gap-5">
+      <div>
+        <h4 class="text-sm font-bold text-slate-900 mb-3">Product detail</h4>
+        <div class="flex items-center gap-3">
+          <div class="w-14 h-12 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0">
+            <i class="pi pi-image text-slate-300"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-slate-800 line-clamp-2">{{ row.product_name || 'Unknown product' }}</div>
+            <div class="text-[10px] text-slate-500 font-mono mt-0.5">SKU: {{ row.sku }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-1 min-h-0">
+        <h4 class="text-sm font-bold text-slate-900 mb-2">Stock adjustment history</h4>
+        <div class="flex items-center gap-1.5 mb-3">
+          <p-datepicker
+            [ngModel]="historyDateRange()"
+            (ngModelChange)="onHistoryDateRangeChange($event)"
+            selectionMode="range"
+            [readonlyInput]="true"
+            dateFormat="d M yy"
+            placeholder="Filter by date"
+            styleClass="text-[11px] w-full"
+            [showIcon]="true"
+            iconDisplay="input"
+          ></p-datepicker>
+          @if (historyDateRange()) {
+            <button
+              (click)="clearHistoryDateRange()"
+              class="shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+              title="Clear date filter"
+            >
+              <i class="pi pi-times text-[9px]"></i>
+            </button>
+          }
+        </div>
+        @if (historyLoading()) {
+          <i class="pi pi-spin pi-spinner text-slate-400 text-sm"></i>
+        } @else if (history().length === 0) {
+          <span class="text-xs text-slate-400">
+            {{ historyDateRange() ? 'No adjustments in this date range.' : 'No adjustments yet.' }}
+          </span>
+        } @else {
+          <div class="flex flex-col gap-4 max-h-80 overflow-y-auto pr-1">
+            @for (audit of history(); track audit.id) {
+              <div class="flex gap-3">
+                <div class="flex flex-col items-center pt-1">
+                  <div class="w-2 h-2 rounded-full bg-slate-300 shrink-0"></div>
+                  @if (!$last) {
+                    <div class="w-px flex-1 bg-slate-200 mt-1"></div>
+                  }
+                </div>
+                <div class="pb-1">
+                  <div class="text-xs font-bold text-slate-800">{{ audit.created_at | date: 'dd MMM yyyy' }}</div>
+                  <div class="text-[10px] text-slate-500 mt-0.5">
+                    @if (audit.adjust_type === 'quantity') {
+                      Adjust Stock "{{ audit.physical_count }} Unit"
+                      @if (audit.discrepancy !== null) {
+                        <span [class.text-red-500]="audit.discrepancy < 0" [class.text-emerald-600]="audit.discrepancy > 0">
+                          ({{ audit.discrepancy > 0 ? '+' : '' }}{{ audit.discrepancy }})
+                        </span>
+                      }
+                    } @else {
+                      Adjust Value "{{ (audit.value_delta_minor ?? 0) / 100 | currency }}"
+                    }
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5 capitalize">{{ audit.reason.replace('_', ' ') }}</div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex items-center justify-between w-full">
+      <span class="text-xs text-slate-500">
+        Learn more about <a class="text-[#F16D22] font-medium hover:underline cursor-pointer">Audit Stock</a>
+      </span>
+      <div class="flex items-center gap-2">
+        <p-button label="Cancel" [text]="true" severity="secondary" size="small" (onClick)="close()"></p-button>
+        <p-button label="Save" size="small" [disabled]="!canSave" [loading]="saving()" (onClick)="save()"></p-button>
+      </div>
+    </div>
+  </ng-template>
+</p-dialog>

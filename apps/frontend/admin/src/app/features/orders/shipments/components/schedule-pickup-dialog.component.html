@@ -1,0 +1,145 @@
+<p-dialog 
+  [visible]="visible" 
+  (visibleChange)="hide()" 
+  [modal]="true" 
+  [header]="step() === 1 ? 'Schedule Pickup' : 'Review & Confirm'"
+  [style]="{ width: '500px' }" 
+  [draggable]="false"
+  [resizable]="false"
+  styleClass="p-0"
+>
+  <!-- STEP 1: Details -->
+  <div *ngIf="step() === 1" class="flex flex-col gap-5 p-2">
+    <div class="bg-blue-50 border border-blue-200 text-blue-800 text-sm p-3 rounded-lg flex items-start gap-3">
+      <i class="pi pi-info-circle mt-0.5"></i>
+      <div>
+        <span class="font-bold">Scheduling pickup for {{ shipments.length }} shipment(s)</span>
+        <p class="text-xs text-blue-600 mt-1">Select carrier and time slot to create a bulk pickup request.</p>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label class="text-sm font-bold text-slate-700">Carrier Service</label>
+      <p-select 
+        [options]="carrierOptions" 
+        [ngModel]="carrier()" 
+        (ngModelChange)="carrier.set($event)"
+        optionLabel="label" 
+        optionValue="value" 
+        styleClass="w-full h-10 border-slate-300 rounded-lg text-sm flex items-center"
+        placeholder="Select Carrier"
+        appendTo="body">
+      </p-select>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-bold text-slate-700">Pickup Date</label>
+        <p-datepicker 
+          [ngModel]="pickupDate()" 
+          (ngModelChange)="pickupDate.set($event)"
+          dateFormat="yy-mm-dd" 
+          placeholder="YYYY-MM-DD" 
+          styleClass="w-full h-10 border-slate-300 rounded-lg"
+          appendTo="body">
+        </p-datepicker>
+      </div>
+      <div class="flex flex-col gap-2">
+        <label class="text-sm font-bold text-slate-700">Pickup Time</label>
+        <p-datepicker 
+          [ngModel]="pickupTime()" 
+          (ngModelChange)="pickupTime.set($event)"
+          [timeOnly]="true" 
+          hourFormat="12" 
+          placeholder="Select Time" 
+          styleClass="w-full h-10 border-slate-300 rounded-lg"
+          appendTo="body">
+        </p-datepicker>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label class="text-sm font-bold text-slate-700">Pickup Note (Optional)</label>
+      <textarea 
+        pTextarea 
+        [ngModel]="note()" 
+        (ngModelChange)="note.set($event)"
+        rows="3" 
+        class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:border-[#F16D22] focus:ring-[#F16D22] resize-none"
+        placeholder="E.g., Please ring the back doorbell">
+      </textarea>
+    </div>
+  </div>
+
+  <!-- STEP 2: Summary -->
+  <div *ngIf="step() === 2" class="flex flex-col gap-5 p-2">
+    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 flex flex-col gap-3 text-sm">
+      <div class="flex justify-between border-b border-slate-200 pb-2">
+        <span class="text-slate-500 font-medium">Carrier</span>
+        <span class="font-bold text-slate-800">{{ carrier() }}</span>
+      </div>
+      <div class="flex justify-between border-b border-slate-200 pb-2">
+        <span class="text-slate-500 font-medium">Pickup Window</span>
+        <span class="font-bold text-slate-800 text-right">
+          {{ pickupDate() | date:'mediumDate' }}<br>
+          at {{ pickupTime() | date:'shortTime' }}
+        </span>
+      </div>
+      <div class="flex justify-between border-b border-slate-200 pb-2">
+        <span class="text-slate-500 font-medium">Note</span>
+        <span class="font-bold text-slate-800">{{ note() || 'None' }}</span>
+      </div>
+      <div class="flex justify-between pt-1">
+        <span class="text-slate-500 font-medium">Shipments Included</span>
+        <span class="font-bold text-slate-800">{{ shipments.length }}</span>
+      </div>
+    </div>
+
+    <!-- Mini list of shipments -->
+    <div class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-2">
+      <div *ngFor="let s of shipments" class="flex justify-between items-center bg-white border border-slate-200 p-3 rounded-lg shadow-sm">
+        <div class="flex items-center gap-3">
+          <i class="pi pi-box text-slate-400"></i>
+          <div>
+            <div class="font-bold text-slate-800 text-sm">{{ s.display_id }}</div>
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider">Order {{ s.order_id }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex justify-end gap-2 w-full pt-4 border-t border-slate-100">
+      <button 
+        *ngIf="step() === 1"
+        class="px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="hide()">
+        Cancel
+      </button>
+      <button 
+        *ngIf="step() === 1"
+        [disabled]="!canGoNext"
+        class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] disabled:bg-slate-300 disabled:cursor-not-allowed text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="next()">
+        Next
+      </button>
+
+      <button 
+        *ngIf="step() === 2"
+        class="px-4 py-2 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 text-sm font-bold rounded-lg shadow-sm transition-colors"
+        (click)="back()"
+        [disabled]="submitting()">
+        Back
+      </button>
+      <button 
+        *ngIf="step() === 2"
+        class="px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 disabled:bg-emerald-300 text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2"
+        (click)="confirm()"
+        [disabled]="submitting()">
+        <i *ngIf="submitting()" class="pi pi-spin pi-spinner text-xs"></i>
+        Confirm Pickup
+      </button>
+    </div>
+  </ng-template>
+</p-dialog>

@@ -1,0 +1,135 @@
+<p-dialog
+  [visible]="visible"
+  (visibleChange)="visibleChange.emit($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [dismissableMask]="true"
+  [style]="{ width: '44rem' }"
+  styleClass="font-sans"
+>
+  <ng-template pTemplate="header">
+    <div class="flex items-start gap-3">
+      <div class="w-11 h-11 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F16D22] shrink-0">
+        <i class="pi pi-history text-lg"></i>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-base font-bold text-slate-900">Stock History</span>
+        <span class="text-xs text-slate-500 mt-0.5">
+          {{ row.product_name || 'Unknown product' }} · <span class="font-mono">{{ row.sku }}</span>
+        </span>
+      </div>
+    </div>
+  </ng-template>
+
+  <div class="py-2 text-slate-700">
+    <div class="flex items-center gap-2 mb-3">
+      <p-datepicker
+        [ngModel]="dateRange()"
+        (ngModelChange)="onDateRangeChange($event)"
+        selectionMode="range"
+        [readonlyInput]="true"
+        dateFormat="d M yy"
+        placeholder="Filter by date range"
+        styleClass="text-xs"
+        [showIcon]="true"
+        iconDisplay="input"
+      ></p-datepicker>
+      @if (dateRange()) {
+        <button
+          (click)="clearDateRange()"
+          class="px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1"
+        >
+          <i class="pi pi-times text-[10px]"></i> Clear
+        </button>
+      }
+    </div>
+
+    @if (loading()) {
+      <div class="p-10 text-center">
+        <i class="pi pi-spin pi-spinner text-slate-400 text-xl"></i>
+      </div>
+    } @else if (loadError()) {
+      <div class="p-10 text-center flex flex-col items-center gap-3">
+        <i class="pi pi-exclamation-triangle text-red-400 text-2xl"></i>
+        <span class="text-xs font-semibold text-slate-700">{{ loadError() }}</span>
+        <button
+          (click)="fetch()"
+          class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-xs font-bold rounded-lg border border-slate-200 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    } @else if (movements().length === 0) {
+      <div class="p-10 text-center flex flex-col items-center gap-2">
+        <i class="pi pi-history text-slate-300 text-2xl"></i>
+        @if (dateRange()) {
+          <span class="text-xs font-semibold text-slate-700">No stock movements in this date range</span>
+          <span class="text-[10px] text-slate-400">Try a wider range, or clear the filter.</span>
+        } @else {
+          <span class="text-xs font-semibold text-slate-700">No stock movements yet</span>
+          <span class="text-[10px] text-slate-400">Movements appear here after audits, reservations, and reorder receipts.</span>
+        }
+      </div>
+    } @else {
+      <div class="border border-slate-200 rounded-xl overflow-hidden">
+        <p-table [value]="movements()" styleClass="p-datatable-sm text-xs">
+          <ng-template pTemplate="header">
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
+              <th class="py-2.5 px-4 text-left w-44">Type</th>
+              <th class="py-2.5 px-4 text-right w-28">Qty Change</th>
+              <th class="py-2.5 px-4 text-left">Reference</th>
+              <th class="py-2.5 px-4 text-right w-40">Date</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-m>
+            <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+              <td class="py-2 px-4">
+                <span class="flex items-center gap-2 font-semibold text-slate-700">
+                  <i [class]="kindIcon(m.kind) + ' text-slate-400 text-xs'"></i>
+                  {{ kindLabel(m.kind) }}
+                </span>
+              </td>
+              <td class="py-2 px-4 text-right font-bold"
+                  [class.text-emerald-600]="m.qty_delta > 0"
+                  [class.text-red-600]="m.qty_delta < 0"
+                  [class.text-slate-500]="m.qty_delta === 0">
+                {{ m.qty_delta > 0 ? '+' : '' }}{{ m.qty_delta }}
+              </td>
+              <td class="py-2 px-4 text-slate-500">
+                @if (m.ref_table && m.ref_id) {
+                  <span class="font-mono text-[10px]">{{ m.ref_table }} · {{ m.ref_id }}</span>
+                } @else {
+                  <span class="text-slate-300">—</span>
+                }
+              </td>
+              <td class="py-2 px-4 text-right text-slate-500">{{ m.created_at | date: 'dd MMM yyyy, HH:mm' }}</td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </div>
+
+      @if (nextCursor()) {
+        <div class="flex justify-center mt-3">
+          <button
+            (click)="loadMore()"
+            [disabled]="loadingMore()"
+            class="px-4 py-1.5 bg-white hover:bg-slate-50 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 transition-colors flex items-center gap-2"
+          >
+            @if (loadingMore()) {
+              <i class="pi pi-spin pi-spinner text-xs"></i>
+            }
+            <span>Load more</span>
+          </button>
+        </div>
+      }
+    }
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex items-center justify-end w-full">
+      <p-button label="Close" [text]="true" severity="secondary" size="small" (onClick)="close()"></p-button>
+    </div>
+  </ng-template>
+</p-dialog>

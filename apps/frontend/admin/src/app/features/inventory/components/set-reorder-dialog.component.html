@@ -1,0 +1,129 @@
+<p-dialog
+  [visible]="visible"
+  (visibleChange)="visibleChange.emit($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [dismissableMask]="true"
+  [style]="{ width: '36rem' }"
+  styleClass="font-sans"
+>
+  <ng-template pTemplate="header">
+    <div class="flex items-start gap-3">
+      <div class="w-11 h-11 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F16D22] shrink-0">
+        <i class="pi pi-refresh text-lg"></i>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-base font-bold text-slate-900">Set Automatic Reorder</span>
+        <span class="text-xs text-slate-500 mt-0.5">Automatically create a Purchase Order when stock is low.</span>
+      </div>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-5 py-2 text-slate-700">
+    <!-- Trigger level & quantity -->
+    <div class="grid grid-cols-2 gap-4">
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Stock Trigger Level</label>
+        <p-inputnumber
+          [ngModel]="triggerLevel()"
+          (ngModelChange)="triggerLevel.set($event)"
+          [min]="0"
+          [showButtons]="false"
+          placeholder="00"
+          suffix=" Unit"
+          styleClass="w-full"
+          inputStyleClass="w-full bg-white text-xs"
+        ></p-inputnumber>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Reorder Quantity</label>
+        <p-inputnumber
+          [ngModel]="reorderQty()"
+          (ngModelChange)="reorderQty.set($event)"
+          [min]="1"
+          [showButtons]="false"
+          placeholder="00"
+          suffix=" Unit"
+          styleClass="w-full"
+          inputStyleClass="w-full bg-white text-xs"
+        ></p-inputnumber>
+      </div>
+    </div>
+
+    <!-- Supplier & Lead time -->
+    <div class="grid grid-cols-2 gap-4">
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Preferred Supplier</label>
+        <p-select
+          [options]="supplierOptions"
+          [ngModel]="preferredSupplierId()"
+          (ngModelChange)="preferredSupplierId.set($event)"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Select supplier"
+          styleClass="w-full bg-white text-xs"
+        ></p-select>
+        <span class="text-[10px] text-slate-400">Supplier directory is mock data — no purchasing backend yet.</span>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Lead Time</label>
+        <p-inputnumber
+          [ngModel]="leadTimeDays()"
+          (ngModelChange)="leadTimeDays.set($event)"
+          [min]="0"
+          [showButtons]="false"
+          placeholder="00"
+          suffix=" days"
+          styleClass="w-full"
+          inputStyleClass="w-full bg-white text-xs"
+        ></p-inputnumber>
+      </div>
+    </div>
+
+    <!-- Method & scope -->
+    <div class="grid grid-cols-2 gap-4">
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Reorder Method</label>
+        <p-select
+          [options]="methodOptions"
+          [ngModel]="method()"
+          (ngModelChange)="method.set($event)"
+          optionLabel="label"
+          optionValue="value"
+          styleClass="w-full bg-white text-xs"
+        ></p-select>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Warehouse Scope</label>
+        <p-select
+          [options]="locationOptions"
+          [ngModel]="locationId()"
+          (ngModelChange)="locationId.set($event)"
+          optionLabel="label"
+          optionValue="value"
+          styleClass="w-full bg-white text-xs"
+        ></p-select>
+      </div>
+    </div>
+
+    @if (errorMessage()) {
+      <div class="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+        {{ errorMessage() }}
+      </div>
+    }
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex items-center justify-between w-full">
+      <span class="text-xs text-slate-500">
+        Learn more about <a class="text-[#F16D22] font-medium hover:underline cursor-pointer">Automatic Reorder</a>
+      </span>
+      <div class="flex items-center gap-2">
+        <p-button label="Cancel" [text]="true" severity="secondary" size="small" (onClick)="close()"></p-button>
+        <p-button label="Save" size="small" [disabled]="!canSave" [loading]="saving()" (onClick)="save()"></p-button>
+      </div>
+    </div>
+  </ng-template>
+</p-dialog>

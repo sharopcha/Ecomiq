@@ -1,0 +1,144 @@
+<div class="p-6 max-w-[1600px] mx-auto text-slate-700">
+
+  <!-- PAGE HEADER -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight text-slate-900">Taxonomy</h1>
+      <p class="text-xs text-slate-500 mt-1">Manage the Category, Vendor and Product Type values products can be assigned.</p>
+    </div>
+    <button
+      (click)="openCreate()"
+      class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] text-xs font-bold rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+    >
+      <i class="pi pi-plus text-xs"></i>
+      <span>Add {{ tabLabel() }}</span>
+    </button>
+  </div>
+
+  <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($any($event))">
+    <p-tablist class="text-xs">
+      <p-tab value="categories" class="!text-xs !font-bold !py-2.5 !px-4 !text-slate-500 data-[p-active=true]:!text-[#F16D22]">Categories</p-tab>
+      <p-tab value="vendors" class="!text-xs !font-bold !py-2.5 !px-4 !text-slate-500 data-[p-active=true]:!text-[#F16D22]">Vendors</p-tab>
+      <p-tab value="types" class="!text-xs !font-bold !py-2.5 !px-4 !text-slate-500 data-[p-active=true]:!text-[#F16D22]">Product Types</p-tab>
+    </p-tablist>
+
+    <p-tabpanels>
+      <p-tabpanel [value]="activeTab()">
+        @if (loading()) {
+          <div class="p-16 border border-slate-200 rounded-2xl text-center bg-white shadow-sm mt-4">
+            <i class="pi pi-spin pi-spinner text-slate-400 text-2xl"></i>
+          </div>
+        } @else if (currentList().length === 0) {
+          <div class="p-16 border border-dashed border-slate-200 rounded-2xl text-center flex flex-col items-center justify-center bg-white shadow-sm mt-4">
+            <i class="pi pi-tags text-slate-400 text-3xl mb-3"></i>
+            <span class="text-sm font-semibold text-slate-800">No {{ tabLabel().toLowerCase() }} values yet</span>
+            <span class="text-xs text-slate-400 mt-1">Add your first one — it'll show up in the product form's dropdown right away.</span>
+          </div>
+        } @else {
+          <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mt-4">
+            <p-table [value]="currentList()" styleClass="p-datatable-sm text-xs">
+              <ng-template pTemplate="header">
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[11px] tracking-wide uppercase">
+                  <th class="py-3.5 px-4 text-left">Name</th>
+                  @if (activeTab() === 'categories') {
+                    <th class="py-3.5 px-4 text-left w-56">Parent Category</th>
+                  }
+                  <th class="py-3.5 px-4 text-right w-28">Actions</th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-item>
+                <tr class="border-b border-slate-150 hover:bg-slate-50/60 transition-colors text-slate-700">
+                  <td class="py-3.5 px-4 font-bold text-slate-900">{{ item.name }}</td>
+                  @if (activeTab() === 'categories') {
+                    <td class="py-3.5 px-4 text-slate-500">
+                      {{ parentName(item.parent_id) || '—' }}
+                    </td>
+                  }
+                  <td class="py-3.5 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                      <button
+                        (click)="openEdit(item)"
+                        class="w-7 h-7 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+                        title="Edit"
+                      >
+                        <i class="pi pi-pencil text-xs"></i>
+                      </button>
+                      <button
+                        (click)="delete(item)"
+                        class="w-7 h-7 rounded hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors"
+                        title="Delete"
+                      >
+                        <i class="pi pi-trash text-xs"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </div>
+        }
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+</div>
+
+<!-- CREATE / EDIT DIALOG -->
+<p-dialog
+  [visible]="showDialog()"
+  (visibleChange)="showDialog.set($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [dismissableMask]="true"
+  [style]="{ width: '28rem' }"
+  styleClass="font-sans"
+>
+  <ng-template pTemplate="header">
+    <div class="flex items-start gap-3">
+      <div class="w-11 h-11 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F16D22] shrink-0">
+        <i class="pi pi-tags text-lg"></i>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-base font-bold text-slate-900">{{ editing() ? 'Edit ' + tabLabel() : 'Add ' + tabLabel() }}</span>
+        <span class="text-xs text-slate-500 mt-0.5">Available immediately in the product form's dropdowns.</span>
+      </div>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-4 py-2 text-slate-700">
+    <div class="flex flex-col gap-1.5">
+      <label class="text-xs font-bold text-slate-900">Name <span class="text-red-500">*</span></label>
+      <input pInputText [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="e.g. Outerwear" class="w-full bg-white text-xs" />
+    </div>
+
+    @if (activeTab() === 'categories') {
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-900">Parent Category</label>
+        <p-select
+          [options]="parentOptions()"
+          [ngModel]="parentId()"
+          (ngModelChange)="parentId.set($event)"
+          optionLabel="name"
+          optionValue="id"
+          [showClear]="true"
+          placeholder="None (top-level category)"
+          styleClass="w-full"
+        ></p-select>
+      </div>
+    }
+
+    @if (dialogError()) {
+      <div class="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+        {{ dialogError() }}
+      </div>
+    }
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="flex items-center justify-end w-full gap-2">
+      <p-button label="Cancel" [text]="true" severity="secondary" size="small" (onClick)="showDialog.set(false)"></p-button>
+      <p-button label="Save" size="small" [disabled]="!name().trim() || saving()" [loading]="saving()" (onClick)="save()"></p-button>
+    </div>
+  </ng-template>
+</p-dialog>

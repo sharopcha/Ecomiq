@@ -1,0 +1,254 @@
+<div class="p-6 max-w-[1600px] mx-auto text-slate-700">
+
+  <!-- PAGE HEADER -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-bold tracking-tight text-slate-900">
+        Shipments
+      </h1>
+      <div class="flex items-center gap-1">
+        <button class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-650 transition-colors cursor-pointer">
+          <i class="pi pi-ellipsis-h text-sm"></i>
+        </button>
+        <button class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-650 transition-colors cursor-pointer">
+          <i class="pi pi-download text-sm"></i>
+        </button>
+      </div>
+    </div>
+    <button 
+      (click)="openSchedulePickup()"
+      class="px-4 py-2 bg-[#F16D22] text-white hover:bg-[#d65715] text-xs font-bold rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+    >
+      <i class="pi pi-plus text-xs"></i>
+      <span>Add Shipment</span>
+    </button>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="p-4 rounded-xl bg-white border border-slate-200 flex flex-col gap-4 mb-6 shadow-sm">
+    <!-- Top row: Tabs -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-3">
+      <!-- Tabs (Saved Views) -->
+      <div class="flex items-center gap-1">
+        <button 
+          (click)="onTabChange('all')" 
+          [class]="activeTab() === 'all'
+            ? 'px-3 py-1.5 text-xs font-bold border-b-2 border-[#F16D22] text-slate-900 transition-all flex items-center gap-1.5 cursor-pointer'
+            : 'px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-all flex items-center gap-1.5 cursor-pointer'"
+        >
+          <i class="pi pi-list text-xs"></i>
+          <span>All Shipments</span>
+        </button>
+        <button 
+          (click)="onTabChange('pending')" 
+          [class]="activeTab() === 'pending'
+            ? 'px-3 py-1.5 text-xs font-bold border-b-2 border-[#F16D22] text-slate-900 transition-all flex items-center gap-1.5 cursor-pointer'
+            : 'px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-all flex items-center gap-1.5 cursor-pointer'"
+        >
+          <i class="pi pi-clock text-xs"></i>
+          <span>Pending</span>
+        </button>
+        <button 
+          (click)="onTabChange('arrived')" 
+          [class]="activeTab() === 'arrived'
+            ? 'px-3 py-1.5 text-xs font-bold border-b-2 border-[#F16D22] text-slate-900 transition-all flex items-center gap-1.5 cursor-pointer'
+            : 'px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-all flex items-center gap-1.5 cursor-pointer'"
+        >
+          <i class="pi pi-check-circle text-xs"></i>
+          <span>Arrived</span>
+        </button>
+        <button 
+          class="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-all flex items-center gap-1 cursor-pointer"
+        >
+          <i class="pi pi-plus text-[10px]"></i>
+          <span>View</span>
+        </button>
+      </div>
+      <!-- Right settings -->
+      <div class="flex items-center gap-2">
+        <button class="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-all flex items-center gap-1.5 cursor-pointer">
+          <i class="pi pi-cog text-xs"></i>
+          <span>View Settings</span>
+          <i class="pi pi-chevron-down text-[9px]"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom row: Search & Dropdowns -->
+    <div class="flex flex-col sm:flex-row items-center gap-3">
+      <!-- Search Input -->
+      <div class="relative w-full sm:w-60">
+        <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-450 text-xs"></i>
+        <input 
+          type="text" 
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+          placeholder="Search"
+          class="w-full h-8 pl-8 pr-4 bg-slate-50 text-slate-700 rounded-full text-xs border border-slate-200 focus:outline-none focus:border-[#F16D22]/60 placeholder-slate-400 transition-all"
+        />
+      </div>
+      
+      <!-- Filters -->
+      <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <!-- Date Range Pill -->
+        <p-popover #dp>
+          <div class="p-2 w-64">
+            <p-datepicker [ngModel]="dateRange()" (ngModelChange)="dateRange.set($event)" selectionMode="range" [inline]="true" styleClass="w-full"></p-datepicker>
+            <div class="flex justify-end mt-2">
+              <button class="text-xs font-bold text-[#F16D22]" (click)="dp.hide()">Apply</button>
+            </div>
+          </div>
+        </p-popover>
+        <button (click)="dp.toggle($event)" class="h-8 px-4 bg-[#0D0D1C] hover:bg-[#1a1a2e] text-white rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer border-0">
+          <span>Date</span>
+          <i class="pi pi-chevron-down text-[8px] opacity-80"></i>
+        </button>
+
+        <!-- Status Select -->
+        <p-select 
+          [options]="statusOptions" 
+          [ngModel]="statusFilter()" 
+          (ngModelChange)="statusFilter.set($event)" 
+          optionLabel="label" 
+          optionValue="value" 
+          placeholder="All Status" 
+          styleClass="orders-pill-select"
+        ></p-select>
+
+        <!-- Hide button -->
+        <button class="h-8 px-4 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-650 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer">
+          <span>Hide</span>
+        </button>
+      </div>
+
+      <!-- Advanced Filters -->
+      <div class="sm:ml-auto">
+        <button class="h-8 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer">
+          <i class="pi pi-sliders-h text-xs text-slate-455"></i>
+          <span>Advanced Filters</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BULK SELECTION BAR -->
+  <div *ngIf="selectedShipments().length > 0" class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex justify-between items-center animate-fadein">
+    <div class="flex items-center gap-3">
+      <div class="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
+        {{ selectedShipments().length }}
+      </div>
+      <span class="text-sm font-bold text-blue-900">Shipments selected</span>
+    </div>
+    <div class="flex gap-2">
+      <button (click)="openSchedulePickup()" class="px-3 py-1.5 bg-white border border-blue-200 text-blue-700 hover:bg-blue-100 text-xs font-bold rounded shadow-sm flex items-center gap-2">
+        <i class="pi pi-truck text-xs"></i> Schedule Pickup
+      </button>
+      <button class="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded shadow-sm flex items-center gap-2">
+        <i class="pi pi-pencil text-xs"></i> Edit Details
+      </button>
+      <button class="px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold rounded shadow-sm flex items-center gap-2">
+        <i class="pi pi-trash text-xs"></i> Delete
+      </button>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+    <p-table [value]="filteredShipments()" [selection]="selectedShipments()" (selectionChange)="selectedShipments.set($event)" [loading]="loading()" dataKey="id" styleClass="p-datatable-sm text-xs" [paginator]="true" [rows]="10" [rowsPerPageOptions]="[10, 20, 50]">
+      <ng-template pTemplate="header">
+        <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[11px] tracking-wide uppercase">
+          <th style="width: 3rem" class="py-3.5 px-4">
+            <p-tableHeaderCheckbox></p-tableHeaderCheckbox>
+          </th>
+          <th class="py-3.5 px-4 text-left">Shipment ID <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+          <th class="py-3.5 px-4 text-left">Timeline <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+          <th class="py-3.5 px-4 text-left">Status <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+          <th class="py-3.5 px-4 text-left">Expected Arrived <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+          <th class="py-3.5 px-4 text-left">Order <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+          <th class="py-3.5 px-4 text-left">Carrier <i class="pi pi-sort text-[9px] ml-1 opacity-70"></i></th>
+          <th class="py-3.5 px-4 w-12"></th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-shipment>
+        <tr class="border-b border-slate-150 hover:bg-slate-50/60 transition-colors text-slate-700">
+          <td class="py-3.5 px-4">
+            <p-tableCheckbox [value]="shipment"></p-tableCheckbox>
+          </td>
+          <td class="py-3.5 px-4 font-bold text-slate-900">
+            <a [routerLink]="['/orders/shipments', shipment.id]" class="hover:text-[#F16D22] transition-colors flex items-center gap-2">
+              {{ shipment.display_id }}
+            </a>
+          </td>
+          <td class="py-3.5 px-4">
+            <div class="flex items-center gap-1">
+              <i [class]="getStageIconClass(shipment, 0)" title="Label Created"></i>
+              <div class="w-4 h-0.5" [class.bg-emerald-500]="shipment.current_stage > 0" [class.bg-slate-200]="shipment.current_stage <= 0"></div>
+              <i [class]="getStageIconClass(shipment, 1)" title="Picked Up"></i>
+              <div class="w-4 h-0.5" [class.bg-emerald-500]="shipment.current_stage > 1" [class.bg-slate-200]="shipment.current_stage <= 1"></div>
+              <i [class]="getStageIconClass(shipment, 2)" title="In Transit"></i>
+              <div class="w-4 h-0.5" [class.bg-emerald-500]="shipment.current_stage > 2" [class.bg-slate-200]="shipment.current_stage <= 2"></div>
+              <i [class]="getStageIconClass(shipment, 3)" title="Delivered"></i>
+            </div>
+          </td>
+          <td class="py-3.5 px-4">
+            <div class="flex items-center gap-2">
+              <span [class]="getStatusClass(shipment.status)">{{ shipment.status.replace('_', ' ') }}</span>
+              <span *ngIf="shipment.is_delayed" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border text-red-600 bg-red-50 border-red-200 flex items-center gap-1">
+                <i class="pi pi-exclamation-triangle text-[10px]"></i> Delay
+              </span>
+            </div>
+          </td>
+          <td class="py-3.5 px-4 text-slate-600 font-medium">
+            {{ shipment.expected_arrival_at ? (shipment.expected_arrival_at | date:'mediumDate') : '--' }}
+          </td>
+          <td class="py-3.5 px-4">
+            <a [routerLink]="['/orders', shipment.order_id]" class="text-[#F16D22] font-semibold hover:underline text-xs flex items-center gap-1">
+              Order <i class="pi pi-external-link text-[10px]"></i>
+            </a>
+          </td>
+          <td class="py-3.5 px-4">
+            <div class="flex items-center gap-2" *ngIf="shipment.carrier">
+              <img *ngIf="getCarrierLogo(shipment.carrier)" [src]="getCarrierLogo(shipment.carrier)" class="h-4 object-contain" [alt]="shipment.carrier">
+              <span class="text-xs font-semibold text-slate-700">{{ shipment.carrier }}</span>
+            </div>
+            <span *ngIf="!shipment.carrier" class="text-slate-400 text-xs italic">--</span>
+          </td>
+          <td class="py-3.5 px-4 text-right">
+            <button class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors cursor-pointer" (click)="onMenuClick($event, menu, shipment)">
+              <i class="pi pi-ellipsis-h"></i>
+            </button>
+            <p-menu #menu [popup]="true" [model]="tableMenu" appendTo="body" styleClass="w-48 text-sm"></p-menu>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="8" class="p-8 text-center text-slate-500">
+            <div class="flex flex-col items-center gap-3">
+              <i class="pi pi-box text-4xl text-slate-300"></i>
+              <p class="font-medium text-slate-600">No shipments found</p>
+              <p class="text-sm">Try adjusting your filters or search query.</p>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+</div>
+
+<app-schedule-pickup-dialog 
+  *ngIf="showPickupDialog()" 
+  [visible]="showPickupDialog()" 
+  (visibleChange)="showPickupDialog.set($event)"
+  [shipments]="selectedShipments()"
+  (scheduled)="onPickupScheduled()">
+</app-schedule-pickup-dialog>
+
+<app-notify-customer-modal
+  *ngIf="showNotifyDialog()"
+  [visible]="showNotifyDialog()"
+  (visibleChange)="showNotifyDialog.set($event)"
+  [customerEmail]="selectedShipmentForAction()?.contact_email || ''"
+  [shipmentId]="selectedShipmentForAction()?.id || ''">
+</app-notify-customer-modal>
+
